@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from MultiheadLatentAttention import MultiHeadLatentAttention
+from Models.MultiheadLatentAttention import MultiHeadLatentAttention
 
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
