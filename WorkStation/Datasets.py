@@ -3,7 +3,7 @@ from torch.utils.data import Dataset
 
 
 class Datasets(Dataset):
-    def __init__(self, file_path, tokenizer, max_seq_len=256, stride=None):
+    def __init__(self, file_path, tokenizer, max_seq_len=512, stride=None):
         self.file_path = file_path
         self.tokenizer = tokenizer
         self.max_len = max_seq_len

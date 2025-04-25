@@ -18,17 +18,20 @@ def test_step(
         for images, labels in dataloader:
             images, labels = images.to(device), labels.to(device)
 
-            with torch.cuda.amp.autocast(enabled=use_amp):
-                logits = model(images)
-                loss = loss_fn(logits, labels)
+            with torch.amp.autocast(enabled=use_amp):
+                logits = model(images)                   # [B, S, V]
+                B, S, V = logits.size()
+                logits_flat = logits.view(-1, V)         # → [B*S, V]
+                labels_flat = labels.view(-1)            # → [B*S]
+                loss = loss_fn(logits_flat, labels_flat) # CrossEntropyLoss(expect [N, C] vs [N])
 
             total_loss += loss.item()
-            preds = logits.argmax(dim=1)
-            total_correct += (preds == labels).sum().item()
-            total_samples += labels.size(0)
+            preds_flat = logits_flat.argmax(dim=1)      # [B*S]
+            total_correct += (preds_flat == labels_flat).sum().item()
+            total_samples += labels_flat.numel()
 
-            all_labels.extend(labels.cpu().numpy())
-            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(labels_flat.cpu().tolist())
+            all_preds.extend(preds_flat.cpu().tolist())
 
     avg_loss = total_loss / len(dataloader)
     accuracy = total_correct / total_samples

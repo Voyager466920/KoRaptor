@@ -35,13 +35,15 @@ class MLPBlock(nn.Module):
         return y
 
 class LatentGPTBlock(nn.Module):
-    def __init__(self, embed_dim: int, latent_dim: int, mlp_dim: int, dropout: float = 0.1):
+    def __init__(self, embed_dim: int, latent_dim: int, mlp_dim: int, dropout: float = 0.1, num_heads: int = 32):
         super().__init__()
         self.norm1 = RMSNorm(embed_dim)
-        self.attn = MultiHeadLatentAttention(dim=embed_dim,
-                                             num_heads=embed_dim // 56,
-                                             latent_dim=latent_dim,
-                                             dropout=dropout)
+        self.attn = MultiHeadLatentAttention(
+            dim=embed_dim,
+            num_heads=num_heads,
+            latent_dim=latent_dim,
+            dropout=dropout
+        )
         self.norm2 = RMSNorm(embed_dim)
         self.mlp = MLPBlock(embed_dim, mlp_dim, dropout)
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -51,20 +53,30 @@ class LatentGPTBlock(nn.Module):
         return x
 
 class LatentGPT(nn.Module):
-    def __init__(self,
-                 vocab_size: int,
-                 max_seq_len: int = 256,
-                 embed_dim: int = 2688,
-                 latent_dim: int = 336,
-                 mlp_dim: int = 6912,
-                 num_layers: int = 24,
-                 dropout: float = 0.1):
+    def __init__(
+        self,
+        vocab_size: int,
+        max_seq_len: int = 256,
+        embed_dim: int = 2688,
+        latent_dim: int = 336,
+        mlp_dim: int = 6912,
+        num_layers: int = 24,
+        dropout: float = 0.1,
+        num_heads: int = 32
+    ):
         super().__init__()
         self.token_embedding = nn.Embedding(vocab_size, embed_dim)
         self.positional_embedding = nn.Parameter(torch.randn(1, max_seq_len, embed_dim))
         self.dropout = nn.Dropout(dropout)
         self.blocks = nn.ModuleList([
-            LatentGPTBlock(embed_dim, latent_dim, mlp_dim, dropout) for _ in range(num_layers)
+            LatentGPTBlock(
+                embed_dim,
+                latent_dim,
+                mlp_dim,
+                dropout,
+                num_heads
+            )
+            for _ in range(num_layers)
         ])
         self.norm = RMSNorm(embed_dim)
         self.lm_head = nn.Linear(embed_dim, vocab_size, bias=False)

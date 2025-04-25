@@ -51,12 +51,16 @@ class MultiHeadLatentAttention(nn.Module):
             v = torch.cat([kv_cache[1], v], dim=2)
         attn_scores = (q @ k.transpose(-2, -1)) * self.scale
         if attn_mask is not None:
-            attn_scores = attn_scores.masked_fill(attn_mask == 0, -1e9)
+            fill_value = torch.finfo(attn_scores.dtype).min if attn_scores.dtype == torch.float16 else -1e9
+            attn_scores = attn_scores.masked_fill(attn_mask == 0, fill_value)
         attn_prob = self.dropout(F.softmax(attn_scores, dim=-1))
         out = attn_prob @ v
         out = out.transpose(1, 2).contiguous().view(b, s, self.dim)
         out = self.out_proj(out)
-        return (out, (k, v)) if use_cache else (out, None)
+        if use_cache:
+            return out, (k.detach(), v.detach())
+        else:
+            return out, None
 
 
 class RMSNorm(nn.Module):
