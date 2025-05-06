@@ -21,11 +21,11 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     BATCH_SIZE = 1
-    MAX_SEQ_LEN = 256
-    NUM_HEADS = 32
-    EMBED_DIM = 2048
-    LATENT_DIM = 336
-    MLP_DIM = 4096
+    MAX_SEQ_LEN = 32768
+    NUM_HEADS = 4
+    EMBED_DIM = 1792
+    LATENT_DIM = 512
+    MLP_DIM = 7168
     NUM_LAYERS = 24
     DROPOUT = 0.1
     NUM_EPOCHS = 100
