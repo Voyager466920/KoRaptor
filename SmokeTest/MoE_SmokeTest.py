@@ -35,7 +35,7 @@ def main():
     ).to(device)
 
     model.eval()
-    batch_size = 2
+    batch_size = 1
     input_ids = torch.randint(0, VOCAB_SIZE, (batch_size, MAX_SEQ_LEN), device=device)
     with torch.no_grad():
         logits, balance_loss = model(input_ids)

@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader, distributed
 import sentencepiece as spm
 from tqdm.auto import tqdm
 
-from Models.LatentGPT import LatentGPT
 from Datasets import Datasets
+from Models.LatentMoE import LatentMoE
 from Train_Step import train_step
 from Test_Step import test_step
 
@@ -21,18 +21,25 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     BATCH_SIZE = 1
-    MAX_SEQ_LEN = 32768
-    NUM_HEADS = 4
-    EMBED_DIM = 1792
-    LATENT_DIM = 512
-    MLP_DIM = 7168
-    NUM_LAYERS = 24
-    DROPOUT = 0.1
+    STRIDE = 128
+    NUM_WORKERS = 4
     NUM_EPOCHS = 100
     LR = 1e-4
     ACCUM_STEPS = 8
-    STRIDE = 128
-    NUM_WORKERS = 4
+
+    VOCAB_SIZE = 32000
+    MAX_SEQ_LEN = 4096
+    NUM_HEADS = 16
+    EMBED_DIM = 1024
+    LATENT_DIM = 256
+    MLP_DIM = 4096
+    NUM_LAYERS = 16
+    DROPOUT = 0.1
+    NUM_EXPERTS = 6
+    EXPERTS_PER_TOKEN = 2
+    BALANCE_LOSS_WEIGHT = 0.01
+
+
 
     tokenizer = spm.SentencePieceProcessor()
     tokenizer.Load("/home/junha/BFG_2B/Tokenizer/spm_kowiki.model")
@@ -71,7 +78,7 @@ def main():
         num_workers=NUM_WORKERS
     )
 
-    model = LatentGPT(
+    model = LatentMoE(
         vocab_size=VOCAB_SIZE,
         max_seq_len=MAX_SEQ_LEN,
         embed_dim=EMBED_DIM,
@@ -79,15 +86,19 @@ def main():
         mlp_dim=MLP_DIM,
         num_layers=NUM_LAYERS,
         dropout=DROPOUT,
-        num_heads=NUM_HEADS
+        num_heads=NUM_HEADS,
+        num_experts=NUM_EXPERTS,
+        experts_per_token=EXPERTS_PER_TOKEN,
+        balance_loss_weight=BALANCE_LOSS_WEIGHT
     ).to(device)
+    model.lm_head.weight = model.token_embedding.weight
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
 
-    optimizer = optim.AdamW(model.parameters(), lr=LR)
+    optimizer = optim.AdamW(model.parameters(), lr=LR, betas=(0.9, 0.95), weight_decay=0.1)
     loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
 
     if local_rank == 0:
-        os.makedirs("Checkpoint", exist_ok=True)
+        os.makedirs(Checkpoint, exist_ok=True)
         epoch_iter = tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs")
     else:
         epoch_iter = range(1, NUM_EPOCHS + 1)

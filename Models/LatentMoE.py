@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.amp import autocast
+from torch.cuda.amp import autocast
 from typing import Tuple
 
 from Models.MultiheadLatentAttention import MultiHeadLatentAttention
@@ -69,15 +69,31 @@ class MoEBlock(nn.Module):
             gate_probs, self.experts_per_token, dim=-1
         )
 
-        expert_outputs = torch.stack([e(x_norm) for e in self.experts], dim=2)
-        combine = torch.zeros_like(gate_probs)
-        combine.scatter_(2, topk_idx, topk_probs)
-        output = torch.einsum("bse,bsed->bsd", combine, expert_outputs)
+        B, S, D = x_norm.shape
+        K = self.experts_per_token
+        x_flat = x_norm.view(-1, D)
+        topk_idx_flat = topk_idx.view(-1, K)
+        topk_probs_flat = topk_probs.view(-1, K)
+        out_flat = torch.zeros_like(x_flat)
+
+        for eid, expert in enumerate(self.experts):
+             mask = (topk_idx_flat == eid)
+             if not mask.any(): continue
+             rows = mask.any(dim=1).nonzero(as_tuple=False).squeeze(-1)
+             expert_in = x_flat.index_select(0, rows)
+             expert_out = expert(expert_in)
+             probs = (topk_probs_flat[rows] * mask[rows].float()).sum(dim=1)
+             expert_out.mul_(probs.unsqueeze(-1))
+             out_flat.index_add_(0, rows, expert_out)
+
+        output = out_flat.view(B, S, D)
         importance = gate_probs.sum(dim=(0, 1))
-        load       = combine.sum(dim=(0, 1))
+        load = torch.zeros(self.num_experts, device=x.device)
+        load.scatter_add_(0, topk_idx_flat.reshape(-1),
+                          torch.ones_like(topk_idx_flat.reshape(-1), dtype=x.dtype))
         balance_loss = 0.5 * (
-            torch.std(importance / importance.sum()) +
-            torch.std(load / load.sum())
+                torch.std(importance / importance.sum()) +
+                torch.std(load / load.sum())
         )
 
         return output, balance_loss
