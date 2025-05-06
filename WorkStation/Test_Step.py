@@ -18,8 +18,12 @@ def test_step(
         for images, labels in dataloader:
             images, labels = images.to(device), labels.to(device)
 
-            with torch.amp.autocast(enabled=use_amp):
-                logits = model(images)                   # [B, S, V]
+            with torch.amp.autocast(enabled=use_amp,device_type=device.type):
+                out = model(images)
+                if isinstance(out, tuple):
+                    logits, _ = out
+                else:
+                    logits = out
                 B, S, V = logits.size()
                 logits_flat = logits.view(-1, V)         # → [B*S, V]
                 labels_flat = labels.view(-1)            # → [B*S]

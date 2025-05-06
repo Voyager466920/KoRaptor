@@ -14,12 +14,18 @@ def train_step(model, dataloader, loss_fn, optimizer, device, accumulation_steps
     for step, (images, labels) in enumerate(dataloader, start=1):
         images, labels = images.to(device), labels.to(device)
 
-        with torch.amp.autocast(enabled=use_amp):
-            logits = model(images)
+        with torch.amp.autocast(enabled=use_amp, device_type=device.type):
+            out = model(images)
+            if isinstance(out, tuple):
+                logits, balance_loss = out
+            else:
+                logits, balance_loss = out, 0.0
             B, S, V = logits.size()
             logits_flat = logits.view(-1, V)
             labels_flat = labels.view(-1)
-            loss = loss_fn(logits_flat, labels_flat) / accumulation_steps
+            ce_loss = loss_fn(logits_flat, labels_flat)
+            loss = (ce_loss + balance_loss * getattr(model, "balance_loss_weight", 0.0)) \
+                                / accumulation_steps
 
         scaler.scale(loss).backward()
         if step % accumulation_steps == 0 or step == len(dataloader):

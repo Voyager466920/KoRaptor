@@ -63,8 +63,10 @@ class MoEBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         x_norm = self.norm(x)
+        if torch.is_autocast_enabled() and x_norm.dtype == torch.float32:
+            x_norm = x_norm.to(torch.float16)
         gate_logits = self.gate_dropout(self.gate(x_norm))
-        gate_probs  = F.softmax(gate_logits, dim=-1)
+        gate_probs = F.softmax(gate_logits, dim=-1)
         topk_probs, topk_idx = torch.topk(
             gate_probs, self.experts_per_token, dim=-1
         )
@@ -74,7 +76,7 @@ class MoEBlock(nn.Module):
         x_flat = x_norm.view(-1, D)
         topk_idx_flat = topk_idx.view(-1, K)
         topk_probs_flat = topk_probs.view(-1, K)
-        out_flat = torch.zeros_like(x_flat)
+        out_flat = torch.zeros_like(x_flat, dtype=x_flat.dtype)
 
         for eid, expert in enumerate(self.experts):
              mask = (topk_idx_flat == eid)
