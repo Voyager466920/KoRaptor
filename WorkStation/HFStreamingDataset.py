@@ -10,7 +10,6 @@ class HFStreamingDataset(IterableDataset):
         self.max_seq_len = max_seq_len
         self.stride = stride
 
-        # encode 함수 시그니처 확인 (SentencePiece vs HuggingFace)
         sig = inspect.signature(self.tok.encode)
         self._use_special_kw = "add_special_tokens" in sig.parameters
 
@@ -22,7 +21,7 @@ class HFStreamingDataset(IterableDataset):
 
     def _token_chunks(self):
         for row in self.hf_iter:
-            ids = self._ids(row["text"])
+            ids = self._ids(row["text"]) #row 안에sentence나 text
             for i in range(0, len(ids) - self.stride, self.stride):
                 chunk = ids[i : i + self.max_seq_len + 1]
                 if len(chunk) < self.max_seq_len + 1:

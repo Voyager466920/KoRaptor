@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from transformers import AutoTokenizer
 import sentencepiece as spm
 from tqdm.auto import tqdm
 from datasets import load_dataset
@@ -20,8 +21,8 @@ def main():
 
     # ---------- 하이퍼파라미터 ----------
     BATCH_SIZE = 1
-    STRIDE = 128
-    NUM_WORKERS = 4
+    STRIDE = 2048
+    NUM_WORKERS = 1
     NUM_EPOCHS = 5
     LR = 1e-4
     ACCUM_STEPS = 8
@@ -38,15 +39,17 @@ def main():
     BALANCE_LOSS_WGT = 0.01
 
     # ---------- 토크나이저 ----------
-    tokenizer = spm.SentencePieceProcessor()
-    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_owt.model")
-    VOCAB_SIZE = tokenizer.GetPieceSize()
+    #tokenizer = spm.SentencePieceProcessor()
+    #tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_owt.model")
+    #VOCAB_SIZE = tokenizer.GetPieceSize()
+    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    VOCAB_SIZE = len(tokenizer)
 
-    owt_train = load_dataset("openwebtext",split="train",streaming=True).shuffle(buffer_size=10000, seed=42)
-    train_dataset = HFStreamingDataset(owt_train,tokenizer,max_seq_len=MAX_SEQ_LEN,stride=STRIDE,)
+    raw_train_dataset = load_dataset("bookcorpus", split="train", streaming=False, cache_dir="C:\junha\Datasets").shuffle(seed=42)
+    raw_test_dataset = load_dataset("bookcorpus", split="train", streaming=False, cache_dir="C:\junha\Datasets").shuffle(seed=123).take(1000)
 
-    owt_val = load_dataset("openwebtext",split="train",streaming=True).shuffle(buffer_size=10000, seed=123).take(1000)
-    val_dataset = HFStreamingDataset(owt_val,tokenizer,max_seq_len=MAX_SEQ_LEN,stride=STRIDE,)
+    train_dataset = HFStreamingDataset(raw_train_dataset,tokenizer,max_seq_len=MAX_SEQ_LEN,stride=STRIDE,)
+    val_dataset = HFStreamingDataset(raw_test_dataset,tokenizer,max_seq_len=MAX_SEQ_LEN,stride=STRIDE,)
 
     train_dataloader = DataLoader(
         train_dataset,
