@@ -1,3 +1,5 @@
 Datasets/kowikitext.train.txt
 Datasets/train.txt
 Datasets/val.txt
+Checkpoints/model_epoch_1.pt
+/Checkpoints/
