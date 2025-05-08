@@ -16,7 +16,6 @@ def train_step(
     scaler = torch.amp.GradScaler(enabled=use_amp)
     optimizer.zero_grad(set_to_none=True)
 
-    # 토큰 합계와 유효 토큰 수
     loss_tokens = 0.0
     total_tok = 0
     correct_tok = 0
@@ -33,9 +32,7 @@ def train_step(
             ce_sum = loss_fn(logits_flat, labels_flat)
             num_tok = (labels_flat != -100).sum().item()
 
-            # MoE balance loss가 있으면 가중치 적용
-            loss = (ce_sum + balance_loss * getattr(model, "balance_loss_weight", 0.0)) \
-                   / accumulation_steps
+            loss = (ce_sum + balance_loss * getattr(model, "balance_loss_weight", 0.0)) / accumulation_steps
 
         scaler.scale(loss).backward()
         if step % accumulation_steps == 0:

@@ -21,7 +21,7 @@ def main():
 
     # ---------- 하이퍼파라미터 ----------
     BATCH_SIZE = 1
-    STRIDE = 2048
+    STRIDE = 512
     NUM_WORKERS = 1
     NUM_EPOCHS = 5
     LR = 1e-4

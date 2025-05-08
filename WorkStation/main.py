@@ -25,7 +25,7 @@ def main():
     LR = 1e-4
     ACCUM_STEPS = 8
 
-    MAX_SEQ_LEN = 4096
+    MAX_SEQ_LEN = 512
     NUM_HEADS = 16
     EMBED_DIM = 1024
     LATENT_DIM = 256
