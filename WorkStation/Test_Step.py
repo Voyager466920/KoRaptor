@@ -1,18 +1,22 @@
+import math
 import torch
 from sklearn.metrics import f1_score
+from typing import Tuple
 
-from sklearn.metrics import f1_score
 
 def test_step(
-    model,
-    dataloader,
-    device,
-    use_amp: bool = False,
-):
+        model,
+        dataloader,
+        loss_fn,
+        device,
+        use_amp: bool = False,
+) -> Tuple[float, float, float]:
     model.eval()
-    total_correct = 0
-    total_samples = 0
-    all_labels, all_preds = [], []
+
+    loss_tokens = 0.0
+    total_tok = 0
+    correct_tok = 0
+    all_lbls, all_preds = [], []
 
     with torch.no_grad():
         for inputs, labels in dataloader:
@@ -22,18 +26,26 @@ def test_step(
                 out = model(inputs)
                 logits = out[0] if isinstance(out, tuple) else out
 
-            preds = logits.view(-1, logits.size(-1)).argmax(dim=1)
-            lbls = labels.view(-1)
+            logits_flat = logits.view(-1, logits.size(-1))
+            labels_flat = labels.view(-1)
 
-            mask = lbls != -100            # ignore_index가 있다면
-            preds, lbls = preds[mask], lbls[mask]
+            ce_sum = loss_fn(logits_flat, labels_flat)
+            num_tok = (labels_flat != -100).sum().item()
 
-            total_correct += (preds == lbls).sum().item()
-            total_samples += lbls.numel()
+            loss_tokens += ce_sum.item()
+            total_tok += num_tok
 
-            all_labels.extend(lbls.cpu().tolist())
-            all_preds.extend(preds.cpu().tolist())
+            preds_flat = logits_flat.argmax(dim=1)
+            mask = labels_flat != -100
+            preds_masked, labels_masked = preds_flat[mask], labels_flat[mask]
 
-    accuracy = total_correct / total_samples if total_samples > 0 else 0.0
-    f1 = f1_score(all_labels, all_preds, average="weighted") if total_samples > 0 else 0.0
-    return accuracy, f1
+            correct_tok += (preds_masked == labels_masked).sum().item()
+            all_lbls.extend(labels_masked.cpu().tolist())
+            all_preds.extend(preds_masked.cpu().tolist())
+
+    avg_ce = loss_tokens / max(total_tok, 1)
+    ppl = math.exp(avg_ce)
+    acc = correct_tok / max(total_tok, 1)
+    f1 = f1_score(all_lbls, all_preds, average="weighted") if total_tok else 0.0
+
+    return ppl, acc, f1

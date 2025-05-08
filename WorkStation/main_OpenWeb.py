@@ -86,19 +86,24 @@ def main():
 
     optimizer = optim.AdamW(model.parameters(), lr=LR,
                             betas=(0.9, 0.95), weight_decay=0.1)
-    loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+    loss_fn = nn.CrossEntropyLoss(ignore_index=-100, reduction="sum")
 
-    # ---------- 학습 ----------
+
     ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints"
     os.makedirs(ckpt_dir, exist_ok=True)
 
     epoch_iter = tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs")
 
     for epoch in epoch_iter:
-        train_loss, train_acc = train_step(model,train_dataloader,loss_fn,optimizer,device,accumulation_steps=ACCUM_STEPS,use_amp=True)
-        val_loss, val_acc, val_f1 = test_step(model,val_dataloader,device,use_amp=True)
+        train_ppl, train_acc = train_step(model, train_dataloader,
+                                          loss_fn, optimizer, device,
+                                          accumulation_steps=ACCUM_STEPS,
+                                          use_amp=True)
 
-        epoch_iter.set_postfix({"Train Loss": f"{train_loss:.3f}","Val Loss": f"{val_loss:.3f}","Val Acc": f"{val_acc * 100:.2f}%"})
+        val_ppl, val_acc, val_f1 = test_step(model, val_dataloader,
+                                             loss_fn, device, use_amp=True)
+
+        epoch_iter.set_postfix({"Train PPL": f"{train_ppl:.1f}","Val PPL": f"{val_ppl:.1f}","Val Acc": f"{val_acc * 100:.2f}%",})
 
         torch.cuda.empty_cache()
         torch.save(model.state_dict(),os.path.join(ckpt_dir, f"model_epoch_{epoch}.pt"))

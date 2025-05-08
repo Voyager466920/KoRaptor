@@ -1,61 +1,41 @@
+import math
 import torch
 from typing import Tuple
-import time
 
-try:
-    import pynvml
-    pynvml.nvmlInit()
-    _HANDLE = pynvml.nvmlDeviceGetHandleByIndex(0)
-except Exception:
-    _HANDLE = None
 
-_TEMP_LIMIT = 83
-_COOL_TIME  = 30
-_STEP_INTERVAL = 200
-_STEP_COOL   = 10
-
-def _maybe_cool_down(step: int) -> None:
-    if step % _STEP_INTERVAL == 0:
-        torch.cuda.empty_cache()
-        #print(f"[Train] {step} steps → {_STEP_COOL}s 휴식")
-        time.sleep(_STEP_COOL)
-    if _HANDLE is None:
-        return
-
-    temp = pynvml.nvmlDeviceGetTemperature(
-        _HANDLE, pynvml.NVML_TEMPERATURE_GPU
-    )
-    if temp >= _TEMP_LIMIT:
-        torch.cuda.empty_cache()
-        print(f"[GPU] 온도 {temp}°C ‑> {_COOL_TIME}s 휴식")
-        time.sleep(_COOL_TIME)
-
-def train_step(model, dataloader, loss_fn, optimizer, device, accumulation_steps=4, use_amp: bool = False) -> Tuple[float, float]:
+def train_step(
+        model,
+        dataloader,
+        loss_fn,
+        optimizer,
+        device,
+        accumulation_steps: int = 4,
+        use_amp: bool = False,
+) -> Tuple[float, float]:
     model.train()
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    batch_count = 0
-
     scaler = torch.amp.GradScaler(enabled=use_amp)
     optimizer.zero_grad(set_to_none=True)
 
-    for step, (images, labels) in enumerate(dataloader, start=1):
-        _maybe_cool_down(step)
-        images, labels = images.to(device), labels.to(device)
+    # 토큰 합계와 유효 토큰 수
+    loss_tokens = 0.0
+    total_tok = 0
+    correct_tok = 0
+
+    for step, (inputs, labels) in enumerate(dataloader, start=1):
+        inputs, labels = inputs.to(device), labels.to(device)
 
         with torch.amp.autocast(enabled=use_amp, device_type=device.type):
-            out = model(images)
-            if isinstance(out, tuple):
-                logits, balance_loss = out
-            else:
-                logits, balance_loss = out, 0.0
-            B, S, V = logits.size()
-            logits_flat = logits.view(-1, V)
+            out = model(inputs)
+            logits, balance_loss = (out if isinstance(out, tuple) else (out, 0.0))
+            logits_flat = logits.view(-1, logits.size(-1))
             labels_flat = labels.view(-1)
-            ce_loss = loss_fn(logits_flat, labels_flat)
-            loss = (ce_loss + balance_loss * getattr(model, "balance_loss_weight", 0.0)) \
-                                / accumulation_steps
+
+            ce_sum = loss_fn(logits_flat, labels_flat)
+            num_tok = (labels_flat != -100).sum().item()
+
+            # MoE balance loss가 있으면 가중치 적용
+            loss = (ce_sum + balance_loss * getattr(model, "balance_loss_weight", 0.0)) \
+                   / accumulation_steps
 
         scaler.scale(loss).backward()
         if step % accumulation_steps == 0:
@@ -63,13 +43,13 @@ def train_step(model, dataloader, loss_fn, optimizer, device, accumulation_steps
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
 
-        running_loss += loss.item() * accumulation_steps
-        batch_count += 1
-
+        loss_tokens += ce_sum.item()
+        total_tok += num_tok
         preds_flat = logits_flat.argmax(dim=1)
-        correct += (preds_flat == labels_flat).sum().item()
-        total += labels_flat.numel()
+        correct_tok += (preds_flat == labels_flat).sum().item()
 
-    avg_loss = running_loss / batch_count
-    accuracy = correct / total
-    return avg_loss, accuracy
+    avg_ce = loss_tokens / max(total_tok, 1)
+    ppl = math.exp(avg_ce)
+    acc = correct_tok / max(total_tok, 1)
+
+    return ppl, acc
