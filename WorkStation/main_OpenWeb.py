@@ -43,6 +43,8 @@ def main():
     #tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_owt.model")
     #VOCAB_SIZE = tokenizer.GetPieceSize()
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    tokenizer.model_max_length = 4096
+    tokenizer.init_kwargs["model_max_length"] = 4096
     VOCAB_SIZE = len(tokenizer)
 
     raw_train_dataset = load_dataset("bookcorpus", split="train", streaming=False, cache_dir="C:\junha\Datasets").shuffle(seed=42)
@@ -94,7 +96,7 @@ def main():
 
     for epoch in epoch_iter:
         train_loss, train_acc = train_step(model,train_dataloader,loss_fn,optimizer,device,accumulation_steps=ACCUM_STEPS,use_amp=True)
-        val_loss, val_acc, val_f1 = test_step(model,val_dataloader,loss_fn,device,use_amp=True)
+        val_loss, val_acc, val_f1 = test_step(model,val_dataloader,device,use_amp=True)
 
         epoch_iter.set_postfix({"Train Loss": f"{train_loss:.3f}","Val Loss": f"{val_loss:.3f}","Val Acc": f"{val_acc * 100:.2f}%"})
 

@@ -1,45 +1,39 @@
 import torch
 from sklearn.metrics import f1_score
 
+from sklearn.metrics import f1_score
+
 def test_step(
     model,
     dataloader,
-    loss_fn,
     device,
     use_amp: bool = False,
 ):
     model.eval()
-    total_loss = 0.0
     total_correct = 0
     total_samples = 0
-    batch_count = 0
     all_labels, all_preds = [], []
 
     with torch.no_grad():
-        for images, labels in dataloader:
-            images, labels = images.to(device), labels.to(device)
+        for inputs, labels in dataloader:
+            inputs, labels = inputs.to(device), labels.to(device)
 
-            with torch.amp.autocast(enabled=use_amp,device_type=device.type):
-                out = model(images)
-                if isinstance(out, tuple):
-                    logits, _ = out
-                else:
-                    logits = out
-                B, S, V = logits.size()
-                logits_flat = logits.view(-1, V)         # → [B*S, V]
-                labels_flat = labels.view(-1)            # → [B*S]
-                loss = loss_fn(logits_flat, labels_flat) # CrossEntropyLoss(expect [N, C] vs [N])
+            with torch.amp.autocast(enabled=use_amp, device_type=device.type):
+                out = model(inputs)
+                logits = out[0] if isinstance(out, tuple) else out
 
-            total_loss += loss.item()
-            batch_count += 1
-            preds_flat = logits_flat.argmax(dim=1)      # [B*S]
-            total_correct += (preds_flat == labels_flat).sum().item()
-            total_samples += labels_flat.numel()
+            preds = logits.view(-1, logits.size(-1)).argmax(dim=1)
+            lbls = labels.view(-1)
 
-            all_labels.extend(labels_flat.cpu().tolist())
-            all_preds.extend(preds_flat.cpu().tolist())
+            mask = lbls != -100            # ignore_index가 있다면
+            preds, lbls = preds[mask], lbls[mask]
 
-    avg_loss = total_loss / batch_count
-    accuracy = total_correct / total_samples
-    f1 = f1_score(all_labels, all_preds, average="weighted")
-    return avg_loss, accuracy, f1
+            total_correct += (preds == lbls).sum().item()
+            total_samples += lbls.numel()
+
+            all_labels.extend(lbls.cpu().tolist())
+            all_preds.extend(preds.cpu().tolist())
+
+    accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+    f1 = f1_score(all_labels, all_preds, average="weighted") if total_samples > 0 else 0.0
+    return accuracy, f1
