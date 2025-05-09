@@ -1,31 +1,34 @@
 import os
+os.environ["HF_DATASETS_OFFLINE"] = "1"
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from transformers import AutoTokenizer
 import sentencepiece as spm
 from tqdm.auto import tqdm
+from datasets import load_dataset
 
-from Datasets import Datasets
 from Models.LatentMoE import LatentMoE
 from Train_Step import train_step
 from Test_Step import test_step
+from WorkStation.StreamingDataset import StreamingDataset
 
 
 def main():
     # ---------- 환경 ----------
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    torch.backends.cudnn.benchmark = True  # 성능 최적화
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch.backends.cudnn.benchmark = True
 
     # ---------- 하이퍼파라미터 ----------
     BATCH_SIZE = 1
-    STRIDE = 128
-    NUM_WORKERS = 4
-    NUM_EPOCHS = 5
+    STRIDE = 512
+    NUM_WORKERS = 1
+    NUM_EPOCHS = 10
     LR = 1e-4
     ACCUM_STEPS = 8
 
-    MAX_SEQ_LEN = 512
+    MAX_SEQ_LEN = 1024
     NUM_HEADS = 16
     EMBED_DIM = 1024
     LATENT_DIM = 256
@@ -38,32 +41,24 @@ def main():
 
     # ---------- 토크나이저 ----------
     tokenizer = spm.SentencePieceProcessor()
-    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model")
+    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model")
     VOCAB_SIZE = tokenizer.GetPieceSize()
 
-    # ---------- 데이터셋 ----------
-    train_dataset = Datasets(
-        r"C:\junha\Git\BFG_2B\Datasets\train.txt",
-        tokenizer,
-        max_seq_len=MAX_SEQ_LEN,
-        stride=STRIDE,
-    )
-    val_dataset = Datasets(
-        r"C:\junha\Git\BFG_2B\Datasets\val.txt",
-        tokenizer,
-        max_seq_len=MAX_SEQ_LEN,
-        stride=STRIDE,
-    )
+    raw_dataset = load_dataset("bookcorpus", split="train", streaming=True, cache_dir="C:\junha\Datasets")
+    train_split = raw_dataset.shuffle(seed=42, buffer_size=10000).take(1000000)
+    test_split = raw_dataset.shuffle(seed=123, buffer_size=10000).skip(1000000)
 
-    train_loader = DataLoader(
+    train_dataset = StreamingDataset(split=train_split, tokenizer=tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+    val_dataset = StreamingDataset(split=test_split, tokenizer=tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+
+    train_dataloader = DataLoader(
         train_dataset,
         batch_size=BATCH_SIZE,
-        shuffle=True,  # 분산 Sampler 대신 shuffle
+        shuffle=False,
         num_workers=NUM_WORKERS,
         pin_memory=True,
-        drop_last=True,
     )
-    val_loader = DataLoader(
+    val_dataloader = DataLoader(
         val_dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
@@ -85,47 +80,36 @@ def main():
         experts_per_token=EXPERTS_PER_TOKEN,
         balance_loss_weight=BALANCE_LOSS_WGT,
     ).to(device)
-    # weight tying
     model.lm_head.weight = model.token_embedding.weight
 
-    optimizer = optim.AdamW(model.parameters(), lr=LR, betas=(0.9, 0.95), weight_decay=0.1)
-    loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+    optimizer = optim.AdamW(model.parameters(), lr=LR,
+                            betas=(0.9, 0.95), weight_decay=0.1)
+    loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
 
-    # ---------- 학습 ----------
-    ckpt_dir = r"C:\junha\BFG_2B\Checkpoints"
+
+    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints"
     os.makedirs(ckpt_dir, exist_ok=True)
 
     epoch_iter = tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs")
 
     for epoch in epoch_iter:
-        train_loss, train_acc = train_step(
-            model,
-            train_loader,
-            loss_fn,
-            optimizer,
-            device,
-            accumulation_steps=ACCUM_STEPS,
-            use_amp=True,
-        )
+        train_ppl, train_acc = train_step(model, train_dataloader,
+                                          loss_fn, optimizer, device,
+                                          accumulation_steps=ACCUM_STEPS,
+                                          use_amp=True)
 
-        val_loss, val_acc, val_f1 = test_step(
-            model,
-            val_loader,
-            loss_fn,
-            device,
-            use_amp=True,
-        )
+        val_ppl, val_acc, val_f1 = test_step(model, val_dataloader,
+                                             loss_fn, device, use_amp=True)
 
         epoch_iter.set_postfix({
-            "Train Loss": f"{train_loss:.3f}",
-            "Val Loss": f"{val_loss:.3f}",
+            "Train PPL": f"{train_ppl:.1f}",
+            "Val PPL": f"{val_ppl:.1f}",
             "Val Acc": f"{val_acc * 100:.2f}%",
+            "Val F1": f"{val_f1:.4f}"
         })
 
         torch.cuda.empty_cache()
-
-        ckpt_path = os.path.join(ckpt_dir, f"model_epoch_{epoch}.pt")
-        torch.save(model.state_dict(), ckpt_path)
+        torch.save(model.state_dict(),os.path.join(ckpt_dir, f"model_epoch_{epoch}.pt"))
 
 
 if __name__ == "__main__":

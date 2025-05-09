@@ -3,8 +3,6 @@ import time
 import torch
 from typing import Tuple
 
-_TEMP_LIMIT = 83
-_COOL_TIME  = 30
 _STEP_INTERVAL = 200
 _STEP_COOL   = 10
 
