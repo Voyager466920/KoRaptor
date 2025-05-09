@@ -3,7 +3,6 @@ import torch
 from sklearn.metrics import f1_score
 from typing import Tuple
 
-
 def test_step(
         model,
         dataloader,
@@ -13,7 +12,7 @@ def test_step(
 ) -> Tuple[float, float, float]:
     model.eval()
 
-    loss_tokens = 0.0
+    total_ce_sum = 0.0
     total_tok = 0
     correct_tok = 0
     all_lbls, all_preds = [], []
@@ -29,23 +28,31 @@ def test_step(
             logits_flat = logits.view(-1, logits.size(-1))
             labels_flat = labels.view(-1)
 
-            ce_sum = loss_fn(logits_flat, labels_flat)
+            batch_ce = loss_fn(logits_flat, labels_flat)  # Mean loss
             num_tok = (labels_flat != -100).sum().item()
+            batch_ce_sum = batch_ce.item() * num_tok
 
-            loss_tokens += ce_sum.item()
+            total_ce_sum += batch_ce_sum  # Fixed: Removed redundant line
             total_tok += num_tok
 
             preds_flat = logits_flat.argmax(dim=1)
             mask = labels_flat != -100
-            preds_masked, labels_masked = preds_flat[mask], labels_flat[mask]
+            preds_masked = preds_flat[mask]
+            labels_masked = labels_flat[mask]
 
             correct_tok += (preds_masked == labels_masked).sum().item()
             all_lbls.extend(labels_masked.cpu().tolist())
             all_preds.extend(preds_masked.cpu().tolist())
 
-    avg_ce = loss_tokens / max(total_tok, 1)
+            # Debug logging
+            print(f"Batch CE: {batch_ce.item():.4f}, Num Tokens: {num_tok}")
+            print(f"Sample Predictions: {preds_masked[:5].tolist()}")
+            print(f"Sample Labels: {labels_masked[:5].tolist()}")
+
+    # Final metrics
+    avg_ce = total_ce_sum / max(total_tok, 1)
     ppl = math.exp(avg_ce)
     acc = correct_tok / max(total_tok, 1)
-    f1 = f1_score(all_lbls, all_preds, average="weighted") if total_tok else 0.0
+    f1 = f1_score(all_lbls, all_preds, average="weighted") if total_tok > 0 else 0.0
 
     return ppl, acc, f1

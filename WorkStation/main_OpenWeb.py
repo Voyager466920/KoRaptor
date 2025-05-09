@@ -23,7 +23,7 @@ def main():
     BATCH_SIZE = 1
     STRIDE = 512
     NUM_WORKERS = 1
-    NUM_EPOCHS = 5
+    NUM_EPOCHS = 10
     LR = 1e-4
     ACCUM_STEPS = 8
 
@@ -47,8 +47,9 @@ def main():
     tokenizer.init_kwargs["model_max_length"] = 4096
     VOCAB_SIZE = len(tokenizer)
 
-    raw_train_dataset = load_dataset("bookcorpus", split="train", streaming=False, cache_dir="C:\junha\Datasets").shuffle(seed=42)
-    raw_test_dataset = load_dataset("bookcorpus", split="train", streaming=False, cache_dir="C:\junha\Datasets").shuffle(seed=123).take(1000)
+    raw_dataset = load_dataset("bookcorpus", split="train", streaming=False, cache_dir="C:\junha\Datasets")
+    raw_train_dataset = raw_dataset.shuffle(seed=42).select(range(int(0.9 * len(raw_dataset))))
+    raw_test_dataset = raw_dataset.shuffle(seed=123).select(range(int(0.9 * len(raw_dataset)), len(raw_dataset)))
 
     train_dataset = HFStreamingDataset(raw_train_dataset,tokenizer,max_seq_len=MAX_SEQ_LEN,stride=STRIDE,)
     val_dataset = HFStreamingDataset(raw_test_dataset,tokenizer,max_seq_len=MAX_SEQ_LEN,stride=STRIDE,)
@@ -86,7 +87,7 @@ def main():
 
     optimizer = optim.AdamW(model.parameters(), lr=LR,
                             betas=(0.9, 0.95), weight_decay=0.1)
-    loss_fn = nn.CrossEntropyLoss(ignore_index=-100, reduction="sum")
+    loss_fn = nn.CrossEntropyLoss(ignore_index=-100, reduction="mean")
 
 
     ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints"

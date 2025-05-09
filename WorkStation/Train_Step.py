@@ -2,7 +2,6 @@ import math
 import torch
 from typing import Tuple
 
-
 def train_step(
         model,
         dataloader,
@@ -29,13 +28,16 @@ def train_step(
             logits_flat = logits.view(-1, logits.size(-1))
             labels_flat = labels.view(-1)
 
-            ce_sum = loss_fn(logits_flat, labels_flat)
+            ce_loss = loss_fn(logits_flat, labels_flat)  # Mean loss
             num_tok = (labels_flat != -100).sum().item()
+            ce_sum = ce_loss * num_tok  # Scale to sum for accumulation
 
-            loss = (ce_sum + balance_loss * getattr(model, "balance_loss_weight", 0.0)) / accumulation_steps
+            loss = (ce_loss + balance_loss * getattr(model, "balance_loss_weight", 0.0)) / accumulation_steps
 
         scaler.scale(loss).backward()
         if step % accumulation_steps == 0:
+            scaler.unscale_(optimizer)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
@@ -44,6 +46,9 @@ def train_step(
         total_tok += num_tok
         preds_flat = logits_flat.argmax(dim=1)
         correct_tok += (preds_flat == labels_flat).sum().item()
+
+        if step % 100 == 0:
+            print(f"Step {step}: CE Loss = {ce_loss.item():.4f}, Balance Loss = {balance_loss.item():.4f}, Grad Norm = {grad_norm:.4f}")
 
     avg_ce = loss_tokens / max(total_tok, 1)
     ppl = math.exp(avg_ce)
