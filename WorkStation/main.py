@@ -1,13 +1,14 @@
 import os
+
+from datasets import load_from_disk
+
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer
 import sentencepiece as spm
 from tqdm.auto import tqdm
-from datasets import load_dataset
 
 from Models.LatentMoE import LatentMoE
 from Train_Step import train_step
@@ -44,12 +45,13 @@ def main():
     tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model")
     VOCAB_SIZE = tokenizer.GetPieceSize()
 
-    raw_dataset = load_dataset("bookcorpus", split="train", streaming=True, cache_dir="C:\junha\Datasets")
-    train_split = raw_dataset.shuffle(seed=42, buffer_size=10000).take(1000000)
-    test_split = raw_dataset.shuffle(seed=123, buffer_size=10000).skip(1000000)
+    train_map = load_from_disk(r"C:\junha\Datasets\BookCorpus\train")
+    val_map = load_from_disk(r"C:\junha\Datasets\BookCorpus\val")
 
-    train_dataset = StreamingDataset(split=train_split, tokenizer=tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
-    val_dataset = StreamingDataset(split=test_split, tokenizer=tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+    train_iterable = train_map.to_iterable_dataset()
+    val_iterable = val_map.to_iterable_dataset()
+    train_dataset = StreamingDataset(train_iterable, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+    val_dataset = StreamingDataset(val_iterable, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
 
     train_dataloader = DataLoader(
         train_dataset,

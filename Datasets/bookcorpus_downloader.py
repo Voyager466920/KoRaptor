@@ -1,9 +1,12 @@
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 
-# cache_dir 에 bookcorpus 전체를 다운로드
-_ = load_dataset(
-    "bookcorpus",
-    split="train",
-    streaming=False,
-    cache_dir=r"C:\junha\Datasets"
-)
+full = load_from_disk(r"C:\junha\Datasets\BookCorpus")
+splits = full.train_test_split(test_size=0.1, seed=42)
+train_map = splits["train"]
+val_map = splits["test"]
+
+train_map.save_to_disk(r"C:\junha\Datasets\BookCorpus\train")
+val_map.  save_to_disk(r"C:\junha\Datasets\BookCorpus\val")
+
+
+print("Cache_dir에 bookcorpus 데이터 다운 완료. streaming=True이어도 네트워크 연결 X")
