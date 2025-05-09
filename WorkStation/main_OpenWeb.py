@@ -8,10 +8,10 @@ import sentencepiece as spm
 from tqdm.auto import tqdm
 from datasets import load_dataset
 
-from HFStreamingDataset import HFStreamingDataset
 from Models.LatentMoE import LatentMoE
 from Train_Step import train_step
 from Test_Step import test_step
+from WorkStation.StreamingDataset import StreamingDataset
 
 
 def main():
@@ -34,25 +34,21 @@ def main():
     MLP_DIM = 4096
     NUM_LAYERS = 16
     DROPOUT = 0.1
-    NUM_EXPERTS = 6
+    NUM_EXPERTS = 0
     EXPERTS_PER_TOKEN = 2
     BALANCE_LOSS_WGT = 0.01
 
     # ---------- 토크나이저 ----------
-    #tokenizer = spm.SentencePieceProcessor()
-    #tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_owt.model")
-    #VOCAB_SIZE = tokenizer.GetPieceSize()
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    tokenizer.model_max_length = 4096
-    tokenizer.init_kwargs["model_max_length"] = 4096
-    VOCAB_SIZE = len(tokenizer)
+    tokenizer = spm.SentencePieceProcessor()
+    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model")
+    VOCAB_SIZE = tokenizer.GetPieceSize()
 
-    raw_dataset = load_dataset("bookcorpus", split="train", streaming=False, cache_dir="C:\junha\Datasets")
+    raw_dataset = load_dataset("bookcorpus", split="train", streaming=True, cache_dir="C:\junha\Datasets")
     raw_train_dataset = raw_dataset.shuffle(seed=42).select(range(int(0.9 * len(raw_dataset))))
     raw_test_dataset = raw_dataset.shuffle(seed=123).select(range(int(0.9 * len(raw_dataset)), len(raw_dataset)))
 
-    train_dataset = HFStreamingDataset(raw_train_dataset,tokenizer,max_seq_len=MAX_SEQ_LEN,stride=STRIDE,)
-    val_dataset = HFStreamingDataset(raw_test_dataset,tokenizer,max_seq_len=MAX_SEQ_LEN,stride=STRIDE,)
+    train_dataset = StreamingDataset(split=raw_train_dataset, tokenizer=tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+    val_dataset = StreamingDataset(split=raw_test_dataset, tokenizer=tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
 
     train_dataloader = DataLoader(
         train_dataset,
@@ -87,7 +83,7 @@ def main():
 
     optimizer = optim.AdamW(model.parameters(), lr=LR,
                             betas=(0.9, 0.95), weight_decay=0.1)
-    loss_fn = nn.CrossEntropyLoss(ignore_index=-100, reduction="mean")
+    loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
 
 
     ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints"
@@ -104,7 +100,12 @@ def main():
         val_ppl, val_acc, val_f1 = test_step(model, val_dataloader,
                                              loss_fn, device, use_amp=True)
 
-        epoch_iter.set_postfix({"Train PPL": f"{train_ppl:.1f}","Val PPL": f"{val_ppl:.1f}","Val Acc": f"{val_acc * 100:.2f}%",})
+        epoch_iter.set_postfix({
+            "Train PPL": f"{train_ppl:.1f}",
+            "Val PPL": f"{val_ppl:.1f}",
+            "Val Acc": f"{val_acc * 100:.2f}%",
+            "Val F1": f"{val_f1:.4f}"
+        })
 
         torch.cuda.empty_cache()
         torch.save(model.state_dict(),os.path.join(ckpt_dir, f"model_epoch_{epoch}.pt"))

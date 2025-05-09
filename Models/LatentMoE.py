@@ -133,7 +133,7 @@ class LatentMoE(nn.Module):
         num_heads: int = 16,
         num_experts: int = 6,
         experts_per_token: int = 2,
-        balance_loss_weight: float = 0.01
+        balance_loss_weight: float = 0.001
     ):
         super().__init__()
         self.token_embedding = nn.Embedding(vocab_size, embed_dim)
