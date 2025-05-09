@@ -124,7 +124,7 @@ class LatentMoE(nn.Module):
     def __init__(
         self,
         vocab_size: int,
-        max_seq_len: int = 32768,
+        max_seq_len: int = 4096,
         embed_dim: int = 1024,
         latent_dim: int = 256,
         mlp_dim: int = 4096,
