@@ -34,7 +34,7 @@ def main():
     MLP_DIM = 4096
     NUM_LAYERS = 16
     DROPOUT = 0.1
-    NUM_EXPERTS = 0
+    NUM_EXPERTS = 6
     EXPERTS_PER_TOKEN = 2
     BALANCE_LOSS_WGT = 0.01
 
@@ -44,11 +44,11 @@ def main():
     VOCAB_SIZE = tokenizer.GetPieceSize()
 
     raw_dataset = load_dataset("bookcorpus", split="train", streaming=True, cache_dir="C:\junha\Datasets")
-    raw_train_dataset = raw_dataset.shuffle(seed=42).select(range(int(0.9 * len(raw_dataset))))
-    raw_test_dataset = raw_dataset.shuffle(seed=123).select(range(int(0.9 * len(raw_dataset)), len(raw_dataset)))
+    train_split = raw_dataset.shuffle(seed=42, buffer_size=10000).take(1000000)
+    test_split = raw_dataset.shuffle(seed=123, buffer_size=10000).skip(1000000)
 
-    train_dataset = StreamingDataset(split=raw_train_dataset, tokenizer=tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
-    val_dataset = StreamingDataset(split=raw_test_dataset, tokenizer=tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+    train_dataset = StreamingDataset(split=train_split, tokenizer=tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+    val_dataset = StreamingDataset(split=test_split, tokenizer=tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
 
     train_dataloader = DataLoader(
         train_dataset,

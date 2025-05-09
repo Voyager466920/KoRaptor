@@ -31,7 +31,7 @@ def test_step(
             labels_flat = labels.view(-1)
 
             # 손실 계산 (pad_id=0에 맞게 ignore_index=0)
-            batch_ce = loss_fn(logits_flat, labels_flat, ignore_index=0)
+            batch_ce = loss_fn(logits_flat, labels_flat)
             num_tok = (labels_flat != 0).sum().item()
 
             # 유효 토큰 없음 경고
@@ -54,15 +54,15 @@ def test_step(
             all_preds.extend(preds_masked.cpu().tolist())
 
             # 디버깅 로그
-            if batch_idx % 10 == 0:  # 10 배치마다 출력
-                valid_ratio = num_tok / labels_flat.numel()
-                print(f"Validation Batch {batch_idx}:")
-                print(f"  Batch CE: {batch_ce.item():.4f}, Num Tokens: {num_tok} (Valid Ratio: {valid_ratio:.4f})")
-                print(f"  Logits Sample: {logits_flat[0, :5].detach().cpu().tolist()}")
-                print(f"  Predictions: {preds_masked[:5].detach().cpu().tolist()}")
-                print(f"  Labels: {labels_masked[:5].detach().cpu().tolist()}")
-                if batch_ce.isnan() or batch_ce.isinf():
-                    print("Warning: Batch CE is NaN or Inf")
+            # if batch_idx % 10 == 0:  # 10 배치마다 출력
+            #     valid_ratio = num_tok / labels_flat.numel()
+            #     print(f"Validation Batch {batch_idx}:")
+            #     print(f"  Batch CE: {batch_ce.item():.4f}, Num Tokens: {num_tok} (Valid Ratio: {valid_ratio:.4f})")
+            #     print(f"  Logits Sample: {logits_flat[0, :5].detach().cpu().tolist()}")
+            #     print(f"  Predictions: {preds_masked[:5].detach().cpu().tolist()}")
+            #     print(f"  Labels: {labels_masked[:5].detach().cpu().tolist()}")
+            #     if batch_ce.isnan() or batch_ce.isinf():
+            #         print("Warning: Batch CE is NaN or Inf")
 
     if total_tok == 0:
         print("Warning: No valid tokens processed in test step")
