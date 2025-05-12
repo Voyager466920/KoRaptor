@@ -3,16 +3,6 @@ import time
 import torch
 from typing import Tuple
 
-_STEP_INTERVAL = 200
-_STEP_COOL   = 10
-
-def _maybe_cool_the_hell_down(step: int) -> None:
-    if step % _STEP_INTERVAL == 0:
-        torch.cuda.empty_cache()
-        #print(f"[Train] {step} steps → {_STEP_COOL}s 휴식")
-        time.sleep(_STEP_COOL)
-
-
 def train_step(
         model,
         dataloader,
@@ -31,7 +21,6 @@ def train_step(
     correct_tok = 0
 
     for step, batch in enumerate(dataloader, start=1):
-        _maybe_cool_the_hell_down(step)
         inputs = batch["input_ids"].to(device)
         labels = batch["labels"].to(device)
 
@@ -44,7 +33,7 @@ def train_step(
             ce_loss = loss_fn(logits_flat, labels_flat)
             num_tok = (labels_flat != 0).sum().item()
 
-            # 유효 토큰 없음 경고
+
             if num_tok == 0:
                 print(f"Warning: Step {step} has no valid tokens (all labels are pad_id=0)")
                 continue
@@ -66,21 +55,9 @@ def train_step(
         preds_flat = logits_flat.argmax(dim=1)
         correct_tok += (preds_flat == labels_flat).sum().item()
 
-        # 디버깅 로그
-        # if step % 10 == 0:
-        #     valid_ratio = num_tok / labels_flat.numel()
-        #     print(f"Step {step}:")
-        #     print(f"  CE Loss: {ce_loss.item():.4f}, Balance Loss: {balance_loss.item():.4f}")
-        #     print(f"  Logits Sample: {logits_flat[0, :5].detach().cpu().tolist()}")
-        #     print(f"  Predictions: {preds_flat[:5].detach().cpu().tolist()}")
-        #     print(f"  Labels: {labels_flat[:5].detach().cpu().tolist()}")
-        #     print(f"  Num Tokens: {num_tok} (Valid Ratio: {valid_ratio:.4f}), Grad Norm: {grad_norm:.4f}")
-        #     if ce_loss.isnan() or ce_loss.isinf():
-        #         print("Warning: CE Loss is NaN or Inf")
-
     if total_tok == 0:
         print("Warning: No valid tokens processed in this epoch")
-        return 1.0, 0.0  # Perplexity=1.0, Accuracy=0.0 반환
+        return 1.0, 0.0
 
     avg_ce = loss_tokens / total_tok
     ppl = math.exp(avg_ce)
