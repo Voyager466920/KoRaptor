@@ -45,9 +45,11 @@ def main():
     tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model")
     VOCAB_SIZE = tokenizer.GetPieceSize()
 
-    train_map = load_from_disk(r"C:\junha\Datasets\BookCorpus\train")
-    val_map = load_from_disk(r"C:\junha\Datasets\BookCorpus\val")
+    # train_map = load_from_disk(r"C:\junha\Datasets\BookCorpus\train")
+    # val_map = load_from_disk(r"C:\junha\Datasets\BookCorpus\val")
 
+    train_map = load_from_disk(r"C:\junha\Datasets\WikiText103\train")
+    val_map = load_from_disk(r"C:\junha\Datasets\WikiText103\val")
     train_iterable = train_map.to_iterable_dataset()
     val_iterable = val_map.to_iterable_dataset()
     train_dataset = StreamingDataset(train_iterable, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
@@ -60,6 +62,7 @@ def main():
         num_workers=NUM_WORKERS,
         pin_memory=True,
     )
+
     val_dataloader = DataLoader(
         val_dataset,
         batch_size=BATCH_SIZE,
@@ -88,8 +91,7 @@ def main():
                             betas=(0.9, 0.95), weight_decay=0.1)
     loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
 
-
-    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints"
+    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints\WikiText103"
     os.makedirs(ckpt_dir, exist_ok=True)
 
     epoch_iter = tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs")
@@ -111,7 +113,7 @@ def main():
         })
 
         torch.cuda.empty_cache()
-        torch.save(model.state_dict(),os.path.join(ckpt_dir, f"model_epoch_{epoch}.pt"))
+        torch.save(model.state_dict(), os.path.join(ckpt_dir, f"model_epoch_{epoch}.pt"))
 
 
 if __name__ == "__main__":

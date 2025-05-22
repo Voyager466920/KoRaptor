@@ -44,10 +44,6 @@ class StreamingDataset(IterableDataset):
                         input_ids += [self.pad_id] * padding_length
                         labels += [self.pad_id] * padding_length
 
-                    # 디버깅
-                    if start == 0:
-                        print(f"Sample input_ids: {input_ids[:10]}, Sample labels: {labels[:10]}")
-
                     yield {
                         "input_ids": torch.tensor(input_ids, dtype=torch.long),
                         "labels": torch.tensor(labels, dtype=torch.long),
