@@ -22,6 +22,7 @@ def create_sample_file(dataset_name, split, config_name=None, output_file=None, 
             if text:
                 f.write(text + "\n")
 
+# BookCorpus 샘플 생성
 create_sample_file(
     "bookcorpus",
     "train",
@@ -29,14 +30,7 @@ create_sample_file(
     max_samples=1_000_000,
 )
 
-create_sample_file(
-    "wikitext",
-    "train",
-    config_name="wikitext-2-raw-v1",
-    output_file="wiki2_sample.txt",
-    max_samples=200_000,
-)
-
+# WikiText-103 샘플 생성
 create_sample_file(
     "wikitext",
     "train",
@@ -45,10 +39,11 @@ create_sample_file(
     max_samples=1_000_000,
 )
 
+# SentencePiece 모델 학습 (전체 vocab_size=35000)
 spm.SentencePieceTrainer.Train(
-    input=["bc_sample.txt", "wiki2_sample.txt", "wiki103_sample.txt"],
+    input=["bc_sample.txt", "wiki103_sample.txt"],
     model_prefix="spm_bc",
-    vocab_size=50_000,
+    vocab_size=35000,
     character_coverage=0.9995,
     model_type="bpe",
     pad_id=0,
@@ -57,7 +52,9 @@ spm.SentencePieceTrainer.Train(
     eos_id=3,
     normalization_rule_name="nfkc",
 )
-for tmp in ["bc_sample.txt", "wiki2_sample.txt", "wiki103_sample.txt"]:
+
+# 임시 파일 삭제
+for tmp in ["bc_sample.txt", "wiki103_sample.txt"]:
     try:
         os.remove(tmp)
     except FileNotFoundError:

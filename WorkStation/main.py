@@ -32,13 +32,13 @@ def main():
     ACCUM_STEPS = 8
 
     MAX_SEQ_LEN = 1024
-    NUM_HEADS = 6
-    EMBED_DIM = 512
-    LATENT_DIM = 256
-    MLP_DIM = 2048
+    NUM_HEADS = 4
+    EMBED_DIM = 256
+    LATENT_DIM = 80
+    MLP_DIM = 728
     NUM_LAYERS = 4
     DROPOUT = 0.1
-    NUM_EXPERTS = 6
+    NUM_EXPERTS = 4
     EXPERTS_PER_TOKEN = 2
     BALANCE_LOSS_WEIGHT = 0.01
 
