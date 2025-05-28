@@ -1,5 +1,5 @@
 import torch
-
+import sentencepiece as spm
 from Models.LatentMoE import LatentMoE
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -7,16 +7,20 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def param_count(model: torch.nn.Module) -> int:
     return sum(p.numel() for p in model.parameters())
 
+
 def main():
-    VOCAB_SIZE = 32000
-    MAX_SEQ_LEN = 4096
-    NUM_HEADS = 16
-    EMBED_DIM = 1024
-    LATENT_DIM = 256
-    MLP_DIM = 4096
-    NUM_LAYERS = 16
+    tokenizer = spm.SentencePieceProcessor()
+    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model")
+
+    VOCAB_SIZE = 35000
+    MAX_SEQ_LEN = 1024
+    NUM_HEADS = 4
+    EMBED_DIM = 256
+    LATENT_DIM = 80
+    MLP_DIM = 728
+    NUM_LAYERS = 4
     DROPOUT = 0.1
-    NUM_EXPERTS = 6
+    NUM_EXPERTS = 4
     EXPERTS_PER_TOKEN = 2
     BALANCE_LOSS_WEIGHT = 0.01
 
