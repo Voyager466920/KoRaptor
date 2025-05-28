@@ -1,10 +1,8 @@
 import os
+os.environ["HF_DATASETS_OFFLINE"] = "1"
+
 from itertools import islice
 from datasets import load_from_disk
-
-from WorkStation.StreamingMultipleDataset import StreamingMultipleDatset
-
-os.environ["HF_DATASETS_OFFLINE"] = "1"
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -18,6 +16,15 @@ from Test_Step import test_step
 from WorkStation.StreamingDataset import StreamingDataset
 
 
+def interleave(*iterables):
+    iterators = [iter(it) for it in iterables]
+    while iterators:
+        for it in list(iterators):
+            try:
+                yield next(it)
+            except StopIteration:
+                iterators.remove(it)
+
 def main():
     # ---------- 환경 ----------
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -25,13 +32,13 @@ def main():
 
     # ---------- 하이퍼파라미터 ----------
     BATCH_SIZE = 1
-    STRIDE = 512
-    NUM_WORKERS = 1
+    STRIDE = 256
+    NUM_WORKERS = 0
     NUM_EPOCHS = 10
     LR = 1e-4
     ACCUM_STEPS = 8
 
-    MAX_SEQ_LEN = 1024
+    MAX_SEQ_LEN = 512
     NUM_HEADS = 4
     EMBED_DIM = 256
     LATENT_DIM = 80
@@ -59,20 +66,11 @@ def main():
     book_train_limited = islice(book_train_iter, 103_000_000)
     book_val_limited = islice(book_val_iter, 3_760)
 
-    # train_dataset = StreamingDataset(train_iterable, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
-    # val_dataset = StreamingDataset(val_iterable, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
-    train_dataset = StreamingMultipleDatset(
-        splits=[book_train_limited, wiki_train_iter],
-        tokenizer=tokenizer,
-        max_seq_len=MAX_SEQ_LEN,
-        stride=STRIDE
-    )
-    val_dataset = StreamingMultipleDatset(
-        splits=[book_val_limited, wiki_val_iter],
-        tokenizer=tokenizer,
-        max_seq_len=MAX_SEQ_LEN,
-        stride=STRIDE
-    )
+    train_iterable = interleave(book_train_limited, wiki_train_iter)
+    val_iterable   = interleave(book_val_limited,   wiki_val_iter)
+
+    train_dataset = StreamingDataset(train_iterable, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+    val_dataset = StreamingDataset(val_iterable, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
 
     train_dataloader = DataLoader(
         train_dataset,
@@ -116,6 +114,18 @@ def main():
     epoch_iter = tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs")
 
     for epoch in epoch_iter:
+        # train iterable regenerate
+        book_train_iter = book_train_map.to_iterable_dataset()
+        wiki_train_iter = wiki_train_map.to_iterable_dataset()
+        book_train_limited = islice(book_train_iter, 103_000_000)
+        train_dataset.iterable = interleave(book_train_limited, wiki_train_iter)
+
+        # val iterable regenerate
+        book_val_iter = book_val_map.to_iterable_dataset()
+        wiki_val_iter = wiki_val_map.to_iterable_dataset()
+        book_val_limited = islice(book_val_iter, 3_760)
+        val_dataset.iterable = interleave(book_val_limited, wiki_val_iter)
+
         train_ppl, train_acc = train_step(model, train_dataloader,
                                           loss_fn, optimizer, device,
                                           accumulation_steps=ACCUM_STEPS,
