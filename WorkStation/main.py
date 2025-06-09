@@ -31,7 +31,7 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     # ---------- 하이퍼파라미터 ----------
-    BATCH_SIZE = 1
+    BATCH_SIZE = 32
     STRIDE = 256
     NUM_WORKERS = 0
     NUM_EPOCHS = 10
@@ -40,10 +40,10 @@ def main():
 
     MAX_SEQ_LEN = 512
     NUM_HEADS = 4
-    EMBED_DIM = 256
-    LATENT_DIM = 80
-    MLP_DIM = 728
-    NUM_LAYERS = 4
+    EMBED_DIM = 192
+    LATENT_DIM = 64
+    MLP_DIM = 512
+    NUM_LAYERS = 3
     DROPOUT = 0.1
     NUM_EXPERTS = 4
     EXPERTS_PER_TOKEN = 2

@@ -43,7 +43,7 @@ create_sample_file(
 spm.SentencePieceTrainer.Train(
     input=["bc_sample.txt", "wiki103_sample.txt"],
     model_prefix="spm_bc",
-    vocab_size=35000,
+    vocab_size=30000,
     character_coverage=0.9995,
     model_type="bpe",
     pad_id=0,
