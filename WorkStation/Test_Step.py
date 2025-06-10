@@ -49,7 +49,8 @@ def test_step(
             preds_masked = preds_flat[mask]
             labels_masked = labels_flat[mask]
 
-            correct_tok += (preds_masked == labels_masked).sum().item()
+            mask = labels_flat != 0
+            correct_tok += (preds_flat[mask] == labels_flat[mask]).sum().item()
             all_lbls.extend(labels_masked.cpu().tolist())
             all_preds.extend(preds_masked.cpu().tolist())
 

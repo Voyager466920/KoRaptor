@@ -31,7 +31,7 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     # ---------- 하이퍼파라미터 ----------
-    BATCH_SIZE = 32
+    BATCH_SIZE = 128
     STRIDE = 256
     NUM_WORKERS = 0
     NUM_EPOCHS = 10
@@ -63,7 +63,7 @@ def main():
     wiki_train_iter = wiki_train_map.to_iterable_dataset()
     wiki_val_iter = wiki_val_map.to_iterable_dataset()
 
-    book_train_limited = islice(book_train_iter, 103_000_000)
+    book_train_limited = islice(book_train_iter, 1_000_000)
     book_val_limited = islice(book_val_iter, 3_760)
 
     train_iterable = interleave(book_train_limited, wiki_train_iter)
@@ -117,7 +117,7 @@ def main():
         # train iterable regenerate
         book_train_iter = book_train_map.to_iterable_dataset()
         wiki_train_iter = wiki_train_map.to_iterable_dataset()
-        book_train_limited = islice(book_train_iter, 103_000_000)
+        book_train_limited = islice(book_train_iter, 1_000_000)
         train_dataset.iterable = interleave(book_train_limited, wiki_train_iter)
 
         # val iterable regenerate

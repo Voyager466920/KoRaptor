@@ -1,7 +1,9 @@
 import math
+import sys
 import time
 import torch
 from typing import Tuple
+from tqdm.auto import tqdm
 
 def train_step(
         model,
@@ -20,7 +22,15 @@ def train_step(
     total_tok = 0
     correct_tok = 0
 
-    for step, batch in enumerate(dataloader, start=1):
+    # progress_bar = tqdm(
+    #     dataloader,
+    #     desc="Training",
+    #     unit="batch",
+    #     mininterval=1.0,
+    #     file=sys.stderr,
+    #     leave=False
+    # )
+    for step, batch in enumerate(dataloader, start=1): #dataloader대신 progress_bar 사용하면 배치마다 보임
         inputs = batch["input_ids"].to(device)
         labels = batch["labels"].to(device)
 
@@ -53,7 +63,8 @@ def train_step(
         loss_tokens += ce_sum.item()
         total_tok += num_tok
         preds_flat = logits_flat.argmax(dim=1)
-        correct_tok += (preds_flat == labels_flat).sum().item()
+        mask = labels_flat != 0
+        correct_tok += (preds_flat[mask] == labels_flat[mask]).sum().item()
 
     if total_tok == 0:
         print("Warning: No valid tokens processed in this epoch")
