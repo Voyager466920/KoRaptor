@@ -22,14 +22,14 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     # ---------- 하이퍼파라미터 ----------
-    BATCH_SIZE = 128
+    BATCH_SIZE = 256
     STRIDE = 256
     NUM_WORKERS = 0
     NUM_EPOCHS = 10
     LR = 1e-4
     ACCUM_STEPS = 8
 
-    MAX_SEQ_LEN = 512
+    MAX_SEQ_LEN = 256
     NUM_HEADS = 4
     EMBED_DIM = 192
     LATENT_DIM = 64
@@ -37,7 +37,7 @@ def main():
     NUM_LAYERS = 3
     DROPOUT = 0.1
     NUM_EXPERTS = 4
-    EXPERTS_PER_TOKEN = 2
+    EXPERTS_PER_TOKEN = 1
     BALANCE_LOSS_WEIGHT = 0.01
 
     # ---------- 토크나이저 ----------

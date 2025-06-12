@@ -3,11 +3,10 @@ import os
 from transformers import AutoTokenizer
 from Models.LatentMoE import LatentMoE
 
-def load_model_and_tokenizer(checkpoint_path, device, max_seq_len=4096, vocab_size=50257, embed_dim=1024, latent_dim=256, mlp_dim=4096, num_layers=16, dropout=0.1, num_heads=16, num_experts=6, experts_per_token=2, balance_loss_weight=0.001):
-    """
-    Load the tokenizer and LatentMoE model with weights from a checkpoint.
-    """
-    # Load tokenizer
+
+def load_model_and_tokenizer(checkpoint_path, device, max_seq_len=4096, vocab_size=50257, embed_dim=1024,
+                             latent_dim=256, mlp_dim=4096, num_layers=16, dropout=0.1, num_heads=16, num_experts=6,
+                             experts_per_token=2, balance_loss_weight=0.001):
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.model_max_length = max_seq_len
     tokenizer.init_kwargs["model_max_length"] = max_seq_len
@@ -35,10 +34,8 @@ def load_model_and_tokenizer(checkpoint_path, device, max_seq_len=4096, vocab_si
 
     return model, tokenizer
 
+
 def generate_text(model, tokenizer, prompt, device, max_length=100, top_k=50, temperature=1.0):
-    """
-    Generate text from a prompt using top-k sampling.
-    """
     # Tokenize input
     input_ids = tokenizer.encode(
         prompt,
@@ -75,6 +72,7 @@ def generate_text(model, tokenizer, prompt, device, max_length=100, top_k=50, te
     # Decode generated tokens
     generated_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
     return generated_text
+
 
 def main():
     # Configuration
@@ -119,6 +117,7 @@ def main():
     generated_text = generate_text(model, tokenizer, prompt, device, max_length, top_k, temperature)
     print(f"Prompt: {prompt}")
     print(f"Generated: {generated_text}")
+
 
 if __name__ == "__main__":
     main()

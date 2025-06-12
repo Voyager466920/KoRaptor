@@ -13,7 +13,7 @@ def main():
     tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model")
 
     VOCAB_SIZE = tokenizer.GetPieceSize()
-    MAX_SEQ_LEN = 512
+    MAX_SEQ_LEN = 256
     NUM_HEADS = 4
     EMBED_DIM = 192
     LATENT_DIM = 64
@@ -21,8 +21,9 @@ def main():
     NUM_LAYERS = 3
     DROPOUT = 0.1
     NUM_EXPERTS = 4
-    EXPERTS_PER_TOKEN = 2
+    EXPERTS_PER_TOKEN = 1
     BALANCE_LOSS_WEIGHT = 0.01
+
 
     model = LatentMoE(
         vocab_size=VOCAB_SIZE,

@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.cuda.amp import autocast
 from typing import Tuple
-
 from Models.MultiheadLatentAttention import MultiHeadLatentAttention
 
 class RMSNorm(nn.Module):
@@ -163,7 +162,7 @@ class LatentMoE(nn.Module):
         total_balance_loss = 0.0
         for blk in self.blocks:
             x, balance_loss = blk(x, mask)
-            total_balance_loss += balance_loss
+            total_balance_loss += balance_loss * self.balance_loss_weight
         x = self.norm(x)
         logits = self.lm_head(x)
         return logits, total_balance_loss / len(self.blocks)
