@@ -1,17 +1,20 @@
-from datasets import load_dataset, load_from_disk
-from WorkStation.StreamingDataset import StreamingDataset
-from torch.utils.data import DataLoader
+from datasets import load_dataset, Dataset
+from itertools import islice
 
-subset = load_dataset(
+stream = load_dataset(
     "tiiuae/falcon-refinedweb",
-    split="train[:0.1%]"
+    split="train",
+    streaming=True,
+    trust_remote_code=True,
 )
 
-splits = subset.train_test_split(test_size=0.1, seed=42)
-train_map = splits["train"]
-val_map   = splits["test"]
+sampled = list(islice(stream, 484_000))
 
-train_map.save_to_disk(r"C:\junha\Datasets\RefinedWebtrain")
-val_map.  save_to_disk(r"C:\junha\Datasets\RefinedWeb\val")
 
-print("RefinedWeb 서브셋(≈1B 토큰) train/val split 저장 완료. 이후엔 네트워크 불필요")
+ds = Dataset.from_list(sampled)
+
+splits = ds.train_test_split(test_size=0.1, seed=42)
+splits["train"].save_to_disk(r"C:\junha\Datasets\RefinedWeb\300M\train")
+splits["test"].save_to_disk(r"C:\junha\Datasets\RefinedWeb\300M\val")
+
+print("로컬에 ≈300M 토큰 서브셋 저장 완료. 이후 load_from_disk만으로 네트워크 불필요")
