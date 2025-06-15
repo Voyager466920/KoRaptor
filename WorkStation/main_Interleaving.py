@@ -102,7 +102,7 @@ def main():
     EXPERTS_PER_TOKEN = 1
     BALANCE_LOSS_WEIGHT = 0.01
 
-    BOOK_TOKEN_LIMIT_TRAIN = 103_000_000
+    BOOK_TOKEN_LIMIT_TRAIN = 206_000_000
     BOOK_TOKEN_LIMIT_VAL = 245_000
 
     tokenizer = spm.SentencePieceProcessor()
@@ -145,7 +145,7 @@ def main():
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
 
-    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints\BFG72M_Wiki_Book"
+    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter72M_Wiki_Book309M"
     os.makedirs(ckpt_dir, exist_ok=True)
 
     epoch_iter = tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs")

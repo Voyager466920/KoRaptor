@@ -1,17 +1,25 @@
 import torch
-import os
-from transformers import AutoTokenizer
+import sentencepiece as spm
 from Models.LatentMoE import LatentMoE
 
 
-def load_model_and_tokenizer(checkpoint_path, device, max_seq_len=4096, vocab_size=50257, embed_dim=1024,
-                             latent_dim=256, mlp_dim=4096, num_layers=16, dropout=0.1, num_heads=16, num_experts=6,
-                             experts_per_token=2, balance_loss_weight=0.001):
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    tokenizer.model_max_length = max_seq_len
-    tokenizer.init_kwargs["model_max_length"] = max_seq_len
+checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter72M_Wiki_Book\72M_model_epoch_10.pt"
+tokenizer_model_path = r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model"
+prompt = "The cat is "
+max_length = 100
+temperature = 1.0
+top_k = 10
+top_p = 0.9
+beam_width = 3
 
-    # Initialize model
+def load_model(cp_path, tk_path, device,
+               max_seq_len=256, embed_dim=512, latent_dim=128,
+               mlp_dim=1024, num_layers=6, dropout=0.1,
+               num_heads=8, num_experts=5, experts_per_token=1,
+               balance_loss_weight=0.01):
+    sp = spm.SentencePieceProcessor()
+    sp.Load(tk_path)
+    vocab_size = sp.GetPieceSize()
     model = LatentMoE(
         vocab_size=vocab_size,
         max_seq_len=max_seq_len,
@@ -25,99 +33,77 @@ def load_model_and_tokenizer(checkpoint_path, device, max_seq_len=4096, vocab_si
         experts_per_token=experts_per_token,
         balance_loss_weight=balance_loss_weight,
     ).to(device)
-    model.lm_head.weight = model.token_embedding.weight  # Tie weights
-
-    # Load checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint)
+    state = torch.load(cp_path, map_location=device)
+    model.load_state_dict(state)
     model.eval()
+    return model, sp
 
-    return model, tokenizer
+@torch.no_grad()
+def sample_sequence(model, sp, device, max_length, temperature, top_k, top_p):
+    eos_id = sp.eos_id()
+    input_ids = torch.tensor([sp.EncodeAsIds(prompt)], dtype=torch.long, device=device)
+    generated = input_ids
 
+    for _ in range(max_length):
+        out = model(generated)
+        logits = out.logits if hasattr(out, 'logits') else (out[0] if isinstance(out, tuple) else out)
+        logits = logits[:, -1, :] / temperature
 
-def generate_text(model, tokenizer, prompt, device, max_length=100, top_k=50, temperature=1.0):
-    # Tokenize input
-    input_ids = tokenizer.encode(
-        prompt,
-        add_special_tokens=False,
-        max_length=4096,
-        truncation=True,
-        return_tensors="pt"
-    ).to(device)  # Shape: [1, seq_len]
+        # top-k
+        if top_k > 0:
+            v, _ = torch.topk(logits, top_k)
+            logits[logits < v[:, -1].unsqueeze(-1)] = -float('Inf')
+        # top-p (nucleus)
+        if top_p < 1.0:
+            sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+            probs = torch.softmax(sorted_logits, dim=-1)
+            cumulative_probs = torch.cumsum(probs, dim=-1)
+            cutoff = cumulative_probs > top_p
+            if cutoff.any():
+                cutoff_index = torch.nonzero(cutoff)[0,1]
+                mask = sorted_logits < sorted_logits[:, cutoff_index].unsqueeze(-1)
+                logits[mask.scatter(1, sorted_indices, mask)] = -float('Inf')
 
-    generated_ids = input_ids.clone()
+        probs = torch.softmax(logits, dim=-1)
+        next_token = torch.multinomial(probs, num_samples=1)
+        generated = torch.cat((generated, next_token), dim=1)
+        if next_token.item() == eos_id:
+            break
 
-    with torch.no_grad():
-        for _ in range(max_length):
-            # Forward pass
-            outputs = model(generated_ids)
-            logits = outputs[0][:, -1, :]  # Get logits for last token, shape: [1, vocab_size]
+    return sp.DecodeIds(generated.squeeze().tolist())
 
-            # Apply temperature
-            logits = logits / temperature
+@torch.no_grad()
+def beam_search(model, sp, device, max_length, temperature, beam_width):
+    eos_id = sp.eos_id()
+    initial = torch.tensor([sp.EncodeAsIds(prompt)], dtype=torch.long, device=device)
+    beams = [(initial, 0.0)]  # (sequence, cumulative log-prob)
 
-            # Top-k sampling
-            top_k_probs, top_k_indices = torch.topk(logits, top_k, dim=-1)
-            top_k_probs = torch.softmax(top_k_probs, dim=-1)
-            next_token = torch.multinomial(top_k_probs, num_samples=1)
-            next_token = top_k_indices.gather(-1, next_token)  # Shape: [1, 1]
+    for _ in range(max_length):
+        candidates = []
+        for seq, score in beams:
+            out = model(seq)
+            logits = out.logits if hasattr(out, 'logits') else (out[0] if isinstance(out, tuple) else out)
+            logits = logits[:, -1, :] / temperature
+            log_probs = torch.log_softmax(logits, dim=-1).squeeze(0)
+            topk_log_probs, topk_indices = torch.topk(log_probs, beam_width)
+            for lp, idx in zip(topk_log_probs.tolist(), topk_indices.tolist()):
+                new_seq = torch.cat((seq, torch.tensor([[idx]], device=device)), dim=1)
+                candidates.append((new_seq, score + lp))
+        # prune
+        beams = sorted(candidates, key=lambda x: x[1], reverse=True)[:beam_width]
+        # if all end with eos, break
+        if all(seq[0, -1].item() == eos_id for seq, _ in beams):
+            break
 
-            # Append to generated sequence
-            generated_ids = torch.cat([generated_ids, next_token], dim=-1)
+    best_seq = beams[0][0]
+    return sp.DecodeIds(best_seq.squeeze().tolist())
 
-            # Stop if sequence exceeds max_seq_len
-            if generated_ids.size(1) >= 4096:
-                break
-
-    # Decode generated tokens
-    generated_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
-    return generated_text
-
-
-def main():
-    # Configuration
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\model_epoch_5.pt"
-    max_seq_len = 4096
-    vocab_size = 50257  # GPT-2 vocab size
-    embed_dim = 1024
-    latent_dim = 256
-    mlp_dim = 4096
-    num_layers = 16
-    dropout = 0.1
-    num_heads = 16
-    num_experts = 6
-    experts_per_token = 2
-    balance_loss_weight = 0.001
-
-    # Load model and tokenizer
-    model, tokenizer = load_model_and_tokenizer(
-        checkpoint_path,
-        device,
-        max_seq_len,
-        vocab_size,
-        embed_dim,
-        latent_dim,
-        mlp_dim,
-        num_layers,
-        dropout,
-        num_heads,
-        num_experts,
-        experts_per_token,
-        balance_loss_weight
-    )
-
-    # Example prompt
-    prompt = "Once upon a time in a distant land, there was a"
-    max_length = 100  # Number of tokens to generate
-    top_k = 50
-    temperature = 1.0
-
-    # Generate text
-    generated_text = generate_text(model, tokenizer, prompt, device, max_length, top_k, temperature)
-    print(f"Prompt: {prompt}")
-    print(f"Generated: {generated_text}")
-
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model, sp = load_model(checkpoint_path, tokenizer_model_path, device)
+    if beam_width > 1:
+        output = beam_search(model, sp, device, max_length, temperature, beam_width)
+    else:
+        output = sample_sequence(model, sp, device, max_length, temperature, top_k, top_p)
+    print("\n=== Generated Output ===\n")
+    print(output)
