@@ -3,9 +3,10 @@ import sentencepiece as spm
 from Models.LatentMoE import LatentMoE
 
 
-checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter72M_Wiki_Book\72M_model_epoch_10.pt"
+#checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter72M_Wiki_Book\72M_model_epoch_10.pt"
+checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter72M_Wiki_Book_Web_309M\72M_309MD_model_epoch_17.pt"
 tokenizer_model_path = r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model"
-prompt = "The cat is "
+prompt = "Who are you"
 max_length = 100
 temperature = 1.0
 top_k = 10

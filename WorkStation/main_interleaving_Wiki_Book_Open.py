@@ -89,7 +89,7 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     # Hyperparameters
-    BATCH_SIZE = 180
+    BATCH_SIZE = 150
     STRIDE = 256
     NUM_WORKERS = 0
     NUM_EPOCHS = 20
@@ -98,13 +98,13 @@ def main():
 
     MAX_SEQ_LEN = 256
     NUM_HEADS = 8
-    EMBED_DIM = 512
-    LATENT_DIM = 128
-    MLP_DIM = 1024
-    NUM_LAYERS = 6
+    EMBED_DIM = 640
+    LATENT_DIM = 160
+    MLP_DIM = 1536
+    NUM_LAYERS = 8
     DROPOUT = 0.1
-    NUM_EXPERTS = 5
-    EXPERTS_PER_TOKEN = 1
+    NUM_EXPERTS = 6
+    EXPERTS_PER_TOKEN = 2
     BALANCE_LOSS_WEIGHT = 0.01
 
     # Token limits per dataset
@@ -112,8 +112,8 @@ def main():
     BOOK_TOKEN_LIMIT_VAL = 245_000
     WIKI_TOKEN_LIMIT_TRAIN = 103_000_000
     WIKI_TOKEN_LIMIT_VAL = 245_000
-    TEXTBOOK2_TOKEN_LIMIT_TRAIN = 103_000_000
-    TEXTBOOK2_TOKEN_LIMIT_VAL = 245_000
+    OPENWEB_TOKEN_LIMIT_TRAIN = 199_000_000
+    OPENWEB_TOKEN_LIMIT_VAL = 245_000
 
     # Load tokenizer
     tokenizer = spm.SentencePieceProcessor()
@@ -130,11 +130,11 @@ def main():
 
     book_train_stream = ShuffleStream(book_train_map, tokenizer, BOOK_TOKEN_LIMIT_TRAIN, MAX_SEQ_LEN, STRIDE)
     wiki_train_stream = ShuffleStream(wiki_train_map, tokenizer, WIKI_TOKEN_LIMIT_TRAIN, MAX_SEQ_LEN, STRIDE)
-    textbook2_train_stream = ShuffleStream(textbook2_train_map, tokenizer, TEXTBOOK2_TOKEN_LIMIT_TRAIN, MAX_SEQ_LEN, STRIDE)
+    textbook2_train_stream = ShuffleStream(textbook2_train_map, tokenizer, OPENWEB_TOKEN_LIMIT_TRAIN, MAX_SEQ_LEN, STRIDE)
 
     book_val_stream = ShuffleStream(book_val_map, tokenizer, BOOK_TOKEN_LIMIT_VAL, MAX_SEQ_LEN, STRIDE)
     wiki_val_stream = ShuffleStream(wiki_val_map, tokenizer, WIKI_TOKEN_LIMIT_VAL, MAX_SEQ_LEN, STRIDE)
-    textbook2_val_stream = ShuffleStream(textbook2_val_map, tokenizer, TEXTBOOK2_TOKEN_LIMIT_VAL, MAX_SEQ_LEN, STRIDE)
+    textbook2_val_stream = ShuffleStream(textbook2_val_map, tokenizer, OPENWEB_TOKEN_LIMIT_VAL, MAX_SEQ_LEN, STRIDE)
 
     train_dataset = CombinedDataset(book_train_stream, wiki_train_stream, textbook2_train_stream)
     val_dataset = CombinedDataset(book_val_stream, wiki_val_stream, textbook2_val_stream)
@@ -162,7 +162,7 @@ def main():
     loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
 
     # Checkpoint directory
-    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter72M_Wiki_Book_Web_309M"
+    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter150M_Wiki_Book_Web_406M"
     os.makedirs(ckpt_dir, exist_ok=True)
 
     # Training loop

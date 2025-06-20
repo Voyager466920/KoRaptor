@@ -15,13 +15,13 @@ def main():
     VOCAB_SIZE = tokenizer.GetPieceSize()
     MAX_SEQ_LEN = 256
     NUM_HEADS = 8
-    EMBED_DIM = 512
-    LATENT_DIM = 128
-    MLP_DIM = 1024
-    NUM_LAYERS = 6
+    EMBED_DIM = 640
+    LATENT_DIM = 160
+    MLP_DIM = 1536
+    NUM_LAYERS = 8
     DROPOUT = 0.1
-    NUM_EXPERTS = 5
-    EXPERTS_PER_TOKEN = 1
+    NUM_EXPERTS = 6
+    EXPERTS_PER_TOKEN = 2
     BALANCE_LOSS_WEIGHT = 0.01
 
 
