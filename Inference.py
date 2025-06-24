@@ -4,7 +4,7 @@ from Models.LatentMoE import LatentMoE
 
 
 #checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter72M_Wiki_Book\72M_model_epoch_10.pt"
-checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter72M_Wiki_Book_Web_309M\72M_309MD_model_epoch_17.pt"
+checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter150M_Wiki_Book_Web_406M\72M_309MD_model_epoch_10.pt"
 tokenizer_model_path = r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model"
 prompt = "Who are you"
 max_length = 100
@@ -13,11 +13,22 @@ top_k = 10
 top_p = 0.9
 beam_width = 3
 
+MAX_SEQ_LEN = 256
+NUM_HEADS = 8
+EMBED_DIM = 640
+LATENT_DIM = 160
+MLP_DIM = 1536
+NUM_LAYERS = 8
+DROPOUT = 0.1
+NUM_EXPERTS = 6
+EXPERTS_PER_TOKEN = 2
+BALANCE_LOSS_WEIGHT = 0.01
+
 def load_model(cp_path, tk_path, device,
-               max_seq_len=256, embed_dim=512, latent_dim=128,
-               mlp_dim=1024, num_layers=6, dropout=0.1,
-               num_heads=8, num_experts=5, experts_per_token=1,
-               balance_loss_weight=0.01):
+               max_seq_len=MAX_SEQ_LEN, embed_dim=EMBED_DIM, latent_dim=LATENT_DIM,
+               mlp_dim=MLP_DIM, num_layers=NUM_LAYERS, dropout=DROPOUT,
+               num_heads=NUM_HEADS, num_experts=NUM_EXPERTS, experts_per_token=EXPERTS_PER_TOKEN,
+               balance_loss_weight=BALANCE_LOSS_WEIGHT):
     sp = spm.SentencePieceProcessor()
     sp.Load(tk_path)
     vocab_size = sp.GetPieceSize()
