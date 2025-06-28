@@ -13,12 +13,6 @@ from Train_Step import train_step
 from Test_Step import test_step
 from WorkStation.StreamingDataset import StreamingDataset
 
-def text_line_iter(file_path):
-    with open(file_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            text = line.strip()
-            if text:
-                yield {"text": text}
 
 def main():
     os.environ["HF_DATASETS_OFFLINE"] = "1"
@@ -49,24 +43,25 @@ def main():
 
     raw_train_map = load_from_disk(r"C:\junha\Datasets\KoWiki_TrainVal\train")
     raw_val_map = load_from_disk(r"C:\junha\Datasets\KoWiki_TrainVal\val")
-
     raw_wiki_train = raw_train_map.map(lambda e: {"text": e["sentence"]}).to_iterable_dataset()
-    raw_wiki_val   = raw_val_map.map(lambda e: {"text": e["sentence"]}).to_iterable_dataset()
+    raw_wiki_val = raw_val_map.map(lambda e: {"text": e["sentence"]}).to_iterable_dataset()
 
-    raw_train_korean = text_line_iter(r"C:\junha\Datasets\KoreanText\Training\Train_KoText.txt")
-    raw_test_korean  = text_line_iter(r"C:\junha\Datasets\KoreanText\Testing\Test_KoText.txt")
+    raw_train_korean = load_from_disk(r"C:\junha\Datasets\KoreanText\Train").map(
+        lambda e: {"text": e["text"]}).to_iterable_dataset()
+    raw_test_korean = load_from_disk(r"C:\junha\Datasets\KoreanText\Test").map(
+        lambda e: {"text": e["text"]}).to_iterable_dataset()
 
     raw_train = chain(raw_wiki_train, raw_train_korean)
-    raw_val   = raw_wiki_val
-    raw_test  = chain(raw_wiki_val, raw_test_korean)
+    raw_val = raw_wiki_val
+    raw_test = chain(raw_wiki_val, raw_test_korean)
 
     train_dataset = StreamingDataset(raw_train, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
-    val_dataset   = StreamingDataset(raw_val,   tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
-    test_dataset  = StreamingDataset(raw_test,  tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+    val_dataset = StreamingDataset(raw_val, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+    test_dataset = StreamingDataset(raw_test, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
-    val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
-    test_loader  = DataLoader(test_dataset,  batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
     model = LatentMoE(
         vocab_size=VOCAB_SIZE,
@@ -91,19 +86,16 @@ def main():
     os.makedirs(ckpt_dir, exist_ok=True)
 
     for epoch in tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs"):
-        train_ppl = train_step(
-            model, train_loader, loss_fn, optimizer, device,
-            accumulation_steps=ACCUM_STEPS, use_amp=True
-        )
-        val_ppl, val_acc = test_step(
-            model, val_loader, loss_fn, device, use_amp=True
-        )
+        train_ppl = train_step(model, train_loader, loss_fn, optimizer, device, accumulation_steps=ACCUM_STEPS,
+                               use_amp=True)
+        val_ppl, val_acc = test_step(model, val_loader, loss_fn, device, use_amp=True)
         scheduler.step()
         torch.cuda.empty_cache()
         torch.save(model.state_dict(), os.path.join(ckpt_dir, f"KoWiki_72M_epoch_{epoch}.pt"))
 
     test_ppl, test_acc = test_step(model, test_loader, loss_fn, device, use_amp=True)
     print(f"Test PPL: {test_ppl:.1f}  Test Acc: {test_acc * 100:.2f}%")
+
 
 if __name__ == "__main__":
     main()

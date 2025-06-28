@@ -3,6 +3,7 @@ import os
 from datasets import disable_caching, load_from_disk, load_dataset
 from konlpy.tag import Mecab
 
+# 토크나이저는 mecab이슈로 colab에서 사용.
 disable_caching()
 
 def create_sample_file(dataset_name, split, output_file, max_samples=1_000_000, cache_dir="./datasets"):
