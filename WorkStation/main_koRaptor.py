@@ -1,10 +1,9 @@
 import os
-from itertools import chain
 from datasets import load_from_disk
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, IterableDataset
 import sentencepiece as spm
 from tqdm.auto import tqdm
 
@@ -14,11 +13,74 @@ from Test_Step import test_step
 from WorkStation.StreamingDataset import StreamingDataset
 
 
+def zip_alternate(*iters):
+    its = [iter(it) for it in iters]
+    while its:
+        for it in list(its):
+            try:
+                yield next(it)
+            except StopIteration:
+                its.remove(it)
+
+
+class ChunkStream(IterableDataset):
+    def __init__(self, raw_iter, tokenizer, max_seq_len, stride):
+        self.raw_iter = raw_iter
+        self.tokenizer = tokenizer
+        self.max_seq_len = max_seq_len
+        self.stride = stride
+
+    def __iter__(self):
+        for chunk in StreamingDataset(
+                self.raw_iter,
+                self.tokenizer,
+                max_seq_len=self.max_seq_len,
+                stride=self.stride
+        ):
+            yield chunk
+
+
+class ShuffleStream(IterableDataset):
+    def __init__(self, map_ds, tokenizer, max_seq_len, stride):
+        self.map_ds = map_ds
+        self.tokenizer = tokenizer
+        self.max_seq_len = max_seq_len
+        self.stride = stride
+        self.epoch = 0
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
+
+    def __iter__(self):
+        ds_shuf = self.map_ds.shuffle(seed=self.epoch)
+        raw_iter = ds_shuf.to_iterable_dataset()
+        return iter(ChunkStream(
+            raw_iter,
+            self.tokenizer,
+            max_seq_len=self.max_seq_len,
+            stride=self.stride
+        ))
+
+
+class CombinedDataset(IterableDataset):
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def set_epoch(self, epoch):
+        for s in self.streams:
+            if hasattr(s, 'set_epoch'):
+                s.set_epoch(epoch)
+
+    def __iter__(self):
+        return zip_alternate(*self.streams)
+
+
 def main():
     os.environ["HF_DATASETS_OFFLINE"] = "1"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
 
+    # Hyperparameters
     BATCH_SIZE = 180
     STRIDE = 256
     NUM_WORKERS = 0
@@ -41,27 +103,22 @@ def main():
     tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model")
     VOCAB_SIZE = tokenizer.GetPieceSize()
 
-    raw_train_map = load_from_disk(r"C:\junha\Datasets\KoWiki_TrainVal\train")
-    raw_val_map = load_from_disk(r"C:\junha\Datasets\KoWiki_TrainVal\val")
-    raw_wiki_train = raw_train_map.map(lambda e: {"text": e["sentence"]}).to_iterable_dataset()
-    raw_wiki_val = raw_val_map.map(lambda e: {"text": e["sentence"]}).to_iterable_dataset()
+    kowiki_train_map = load_from_disk(r"C:\junha\Datasets\KoWiki_TrainVal\train")
+    kowiki_val_map = load_from_disk(r"C:\junha\Datasets\KoWiki_TrainVal\val")
+    koreantext_train_map = load_from_disk(r"C:\junha\Datasets\KoreanText\Train")
+    koreantext_val_map = load_from_disk(r"C:\junha\Datasets\KoreanText\Test")
 
-    raw_train_korean = load_from_disk(r"C:\junha\Datasets\KoreanText\Train").map(
-        lambda e: {"text": e["text"]}).to_iterable_dataset()
-    raw_test_korean = load_from_disk(r"C:\junha\Datasets\KoreanText\Test").map(
-        lambda e: {"text": e["text"]}).to_iterable_dataset()
+    kowiki_train_stream = ShuffleStream(kowiki_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    koreantext_train_stream = ShuffleStream(koreantext_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
 
-    raw_train = chain(raw_wiki_train, raw_train_korean)
-    raw_val = raw_wiki_val
-    raw_test = chain(raw_wiki_val, raw_test_korean)
+    kowiki_val_stream = ShuffleStream(kowiki_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    koreantext_val_stream = ShuffleStream(koreantext_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
 
-    train_dataset = StreamingDataset(raw_train, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
-    val_dataset = StreamingDataset(raw_val, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
-    test_dataset = StreamingDataset(raw_test, tokenizer, max_seq_len=MAX_SEQ_LEN, stride=STRIDE)
+    train_dataset = CombinedDataset(kowiki_train_stream, koreantext_train_stream)
+    val_dataset = CombinedDataset(kowiki_val_stream, koreantext_val_stream)
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+    val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
     model = LatentMoE(
         vocab_size=VOCAB_SIZE,
@@ -82,20 +139,32 @@ def main():
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
     loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
 
-    ckpt_dir = r"/Checkpoints/Rapter72M_KoWiki"
+    ckpt_dir = r"/Checkpoints/KoRapter72M_Kowiki_AIHub"
     os.makedirs(ckpt_dir, exist_ok=True)
 
-    for epoch in tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs"):
-        train_ppl = train_step(model, train_loader, loss_fn, optimizer, device, accumulation_steps=ACCUM_STEPS,
-                               use_amp=True)
-        val_ppl, val_acc = test_step(model, val_loader, loss_fn, device, use_amp=True)
+    epoch_iter = tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs")
+    for epoch in epoch_iter:
+        train_dataset.set_epoch(epoch)
+        val_dataset.set_epoch(epoch)
+
+        train_ppl = train_step(
+            model, train_dataloader, loss_fn, optimizer, device,
+            accumulation_steps=ACCUM_STEPS, use_amp=True
+        )
+        val_ppl, val_acc = test_step(
+            model, val_dataloader, loss_fn, device, use_amp=True
+        )
+
         scheduler.step()
+
+        epoch_iter.set_postfix({
+            "Train PPL": f"{train_ppl:.1f}",
+            "Val PPL": f"{val_ppl:.1f}",
+            "Val Acc": f"{val_acc * 100:.2f}%"
+        })
+
         torch.cuda.empty_cache()
-        torch.save(model.state_dict(), os.path.join(ckpt_dir, f"KoWiki_72M_epoch_{epoch}.pt"))
-
-    test_ppl, test_acc = test_step(model, test_loader, loss_fn, device, use_amp=True)
-    print(f"Test PPL: {test_ppl:.1f}  Test Acc: {test_acc * 100:.2f}%")
-
+        torch.save(model.state_dict(), os.path.join(ckpt_dir, f"model_epoch_{epoch}.pt"))
 
 if __name__ == "__main__":
     main()
