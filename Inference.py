@@ -3,9 +3,9 @@ import sentencepiece as spm
 from collections import Counter
 from Models.LatentMoE import LatentMoE
 
-checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter150M_Wiki_Book_Web_406M\72M_309MD_model_epoch_18.pt"
-tokenizer_model_path = r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model"
-prompt = "The cat is"
+checkpoint_path = r"/Checkpoints/KoRapter72M_Kowiki_AIHub/model_epoch_1.pt"
+tokenizer_model_path = r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model"
+prompt = "고양이"
 max_length = 100
 temperature = 0.8
 top_k = 10
@@ -17,13 +17,13 @@ alpha = 0.7
 
 MAX_SEQ_LEN = 256
 NUM_HEADS = 8
-EMBED_DIM = 640
-LATENT_DIM = 160
-MLP_DIM = 1536
-NUM_LAYERS = 8
+EMBED_DIM = 512
+LATENT_DIM = 128
+MLP_DIM = 1024
+NUM_LAYERS = 6
 DROPOUT = 0.1
-NUM_EXPERTS = 6
-EXPERTS_PER_TOKEN = 2
+NUM_EXPERTS = 5
+EXPERTS_PER_TOKEN = 1
 BALANCE_LOSS_WEIGHT = 0.01
 NEG_INF = -1e9
 

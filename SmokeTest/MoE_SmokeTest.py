@@ -10,7 +10,7 @@ def param_count(model: torch.nn.Module) -> int:
 
 def main():
     tokenizer = spm.SentencePieceProcessor()
-    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_bc.model")
+    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model")
 
     VOCAB_SIZE = tokenizer.GetPieceSize()
     MAX_SEQ_LEN = 256
