@@ -3,7 +3,7 @@ import sentencepiece as spm
 from collections import Counter
 from Models.LatentMoE import LatentMoE
 
-checkpoint_path = r"/Checkpoints/KoRapter72M_Kowiki_AIHub/model_epoch_1.pt"
+checkpoint_path = r"/Checkpoints/KoRapter72M_Kowiki_AIHub/model_epoch_4.pt"
 tokenizer_model_path = r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model"
 prompt = "고양이"
 max_length = 100

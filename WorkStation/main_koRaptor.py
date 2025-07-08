@@ -81,22 +81,23 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     # Hyperparameters
-    BATCH_SIZE = 180
+    BATCH_SIZE = 150
     STRIDE = 256
     NUM_WORKERS = 0
     NUM_EPOCHS = 20
     LR = 5e-4
     ACCUM_STEPS = 1
 
+
     MAX_SEQ_LEN = 256
     NUM_HEADS = 8
-    EMBED_DIM = 512
-    LATENT_DIM = 128
-    MLP_DIM = 1024
-    NUM_LAYERS = 6
+    EMBED_DIM = 640
+    LATENT_DIM = 160
+    MLP_DIM = 1536
+    NUM_LAYERS = 8
     DROPOUT = 0.1
-    NUM_EXPERTS = 5
-    EXPERTS_PER_TOKEN = 1
+    NUM_EXPERTS = 6
+    EXPERTS_PER_TOKEN = 2
     BALANCE_LOSS_WEIGHT = 0.01
 
     tokenizer = spm.SentencePieceProcessor()
@@ -139,7 +140,7 @@ def main():
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
     loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
 
-    ckpt_dir = r"C:/junha/Git/BFG_2B/Checkpoints/KoRapter72M_Kowiki_AIHub"
+    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter150M_Kowiki_AIHub_lr_1e_3"
     os.makedirs(ckpt_dir, exist_ok=True)
 
     epoch_iter = tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs")
