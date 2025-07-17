@@ -88,7 +88,6 @@ def main():
     LR = 5e-4
     ACCUM_STEPS = 1
 
-
     MAX_SEQ_LEN = 256
     NUM_HEADS = 8
     EMBED_DIM = 640
