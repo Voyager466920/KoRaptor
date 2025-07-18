@@ -1,136 +1,130 @@
 import os
-from datasets import load_from_disk
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, IterableDataset
 import sentencepiece as spm
-from tqdm.auto import tqdm
-
+import torch
+from torch.utils.data import Dataset, DataLoader
+from transformers import get_linear_schedule_with_warmup
+from datasets import load_dataset, concatenate_datasets
+from peft import get_peft_model, LoraConfig, TaskType
 from Models.LatentMoE import LatentMoE
-from Train_Step import train_step
-from Test_Step import test_step
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+MAX_SEQ_LEN = 256
+BATCH_SIZE = 4
+GRAD_ACC_STEPS = 8
+NUM_EPOCHS = 2
+LEARNING_RATE = 1e-4
+SAVE_STEPS = 500
+OUTPUT_DIR = "./lora-finetuned-latentmoe"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-def collate_fn(batch):
-    input_ids = nn.utils.rnn.pad_sequence(
-        [b["input_ids"] for b in batch],
-        batch_first=True,
-        padding_value=0
-    )
-    labels = nn.utils.rnn.pad_sequence(
-        [b["target_ids"] for b in batch],
-        batch_first=True,
-        padding_value=-100
-    )
-    return {"input_ids": input_ids, "labels": labels}
+sp = spm.SentencePieceProcessor()
+sp.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model")
+PAD_ID = sp.PieceToId("<pad>")
+EOS_ID = sp.PieceToId("</s>")
 
+ds1 = load_dataset("beomi/KoAlpaca-v1.1a")["train"]
+ds2 = load_dataset("MarkrAI/KoCommercial-Dataset", split="train")
+raw_ds = concatenate_datasets([ds1, ds2])
 
-class QAChunkStream(IterableDataset):
-    def __init__(self, hf_split, tokenizer, max_seq_len, stride):
-        self.hf_split = hf_split
-        self.tokenizer = tokenizer
-        self.max_seq_len = max_seq_len
-        self.stride = stride
+def encode_fn(example):
+    text = example["instruction"]
+    if example.get("input"):
+        text += "\n" + example["input"]
+    ids = sp.EncodeAsIds(text)
+    ids = ids[:MAX_SEQ_LEN-1] + [EOS_ID]
+    pad_len = MAX_SEQ_LEN - len(ids)
+    ids += [PAD_ID] * pad_len
+    labs = sp.EncodeAsIds(example["output"])
+    labs = labs[:MAX_SEQ_LEN//2-1] + [EOS_ID]
+    pad_l = MAX_SEQ_LEN//2 - len(labs)
+    labs += [PAD_ID] * pad_l
+    return {"input_ids": ids, "labels": labs}
 
-    def __iter__(self):
-        for ex in self.hf_split:
-            text = f"질문: {ex['question']}  문맥: {ex['context']}  답변: {ex['answers']['text'][0]}"
-            ids = self.tokenizer.EncodeAsIds(text)
-            for i in range(0, len(ids), self.stride):
-                chunk = ids[i: i + self.max_seq_len]
-                if len(chunk) < 2:
-                    continue
-                input_ids = torch.tensor(chunk[:-1], dtype=torch.long)
-                target_ids = torch.tensor(chunk[1:], dtype=torch.long)
-                yield {"input_ids": input_ids, "target_ids": target_ids}
+processed = raw_ds.map(encode_fn, remove_columns=raw_ds.column_names)
+processed.set_format(type="torch", columns=["input_ids","labels"])
 
+class SimpleDataset(Dataset):
+    def __init__(self, hf_ds):
+        self.ds = hf_ds
+    def __len__(self):
+        return len(self.ds)
+    def __getitem__(self, i):
+        item = self.ds[i]
+        return {
+            "input_ids": item["input_ids"],
+            "attention_mask": (item["input_ids"] != PAD_ID).long(),
+            "labels": item["labels"]
+        }
 
-def main():
-    os.environ["HF_DATASETS_OFFLINE"] = "1"
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    torch.backends.cudnn.benchmark = True
+train_ds = SimpleDataset(processed)
+train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 
-    BATCH_SIZE = 150
-    STRIDE = 256
-    NUM_WORKERS = 0
-    NUM_EPOCHS = 20
-    LR = 3e-4
-    ACCUM_STEPS = 1
+model = LatentMoE(
+    vocab_size=sp.GetPieceSize(),
+    max_seq_len=MAX_SEQ_LEN,
+    embed_dim=640,
+    latent_dim=160,
+    mlp_dim=1536,
+    num_layers=8,
+    dropout=0.1,
+    num_heads=8,
+    num_experts=6,
+    experts_per_token=2,
+    balance_loss_weight=0.01,
+).to(device)
+model = model.half()
 
-    MAX_SEQ_LEN = 256
-    NUM_HEADS = 8
-    EMBED_DIM = 640
-    LATENT_DIM = 160
-    MLP_DIM = 1536
-    NUM_LAYERS = 8
-    DROPOUT = 0.1
-    NUM_EXPERTS = 6
-    EXPERTS_PER_TOKEN = 2
-    BALANCE_LOSS_WEIGHT = 0.01
+lora_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    r=8,
+    lora_alpha=16,
+    lora_dropout=0.1,
+    target_modules=[
+        "q_proj",
+        "dkv_proj",
+        "up_proj_k",
+        "up_proj_v",
+        "out_proj",
+        "fc1",
+        "fc2",
+        "lm_head",
+    ],)
+model = get_peft_model(model, lora_config)
+model.train()
 
-    tokenizer = spm.SentencePieceProcessor()
-    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model")
-    VOCAB_SIZE = tokenizer.GetPieceSize()
+optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+total_steps = (len(train_loader) // GRAD_ACC_STEPS) * NUM_EPOCHS
+scheduler = get_linear_schedule_with_warmup(
+    optimizer,
+    num_warmup_steps=int(total_steps * 0.1),
+    num_training_steps=total_steps
+)
 
-    train_split = load_from_disk(r"C:\junha\Datasets\KorQuAD\v1.0\train")
-    val_split = load_from_disk(r"C:\junha\Datasets\KorQuAD\v1.0\val")
+scaler = torch.cuda.amp.GradScaler()
+global_step = 0
 
-    train_stream = QAChunkStream(train_split, tokenizer, MAX_SEQ_LEN, STRIDE)
-    val_stream = QAChunkStream(val_split, tokenizer, MAX_SEQ_LEN, STRIDE)
+for epoch in range(NUM_EPOCHS):
+    for step, batch in enumerate(train_loader):
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        labels = batch["labels"].to(device)
+        with torch.cuda.amp.autocast():
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            loss = outputs.loss / GRAD_ACC_STEPS
+        scaler.scale(loss).backward()
+        if (step + 1) % GRAD_ACC_STEPS == 0:
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()
+            scheduler.step()
+            global_step += 1
+            if global_step % SAVE_STEPS == 0:
+                save_path = os.path.join(OUTPUT_DIR, f"checkpoint-step-{global_step}")
+                model.save_pretrained(save_path)
+                sp.Save(os.path.join(save_path, "spm.model"))
+    save_path = os.path.join(OUTPUT_DIR, f"checkpoint-epoch-{epoch+1}")
+    model.save_pretrained(save_path)
+    sp.Save(os.path.join(save_path, "spm.model"))
 
-    train_loader = DataLoader(
-        train_stream,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        num_workers=NUM_WORKERS,
-        collate_fn=collate_fn
-    )
-    val_loader = DataLoader(
-        val_stream,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        num_workers=NUM_WORKERS,
-        collate_fn=collate_fn
-    )
-
-    model = LatentMoE(
-        vocab_size=VOCAB_SIZE,
-        max_seq_len=MAX_SEQ_LEN,
-        embed_dim=EMBED_DIM,
-        latent_dim=LATENT_DIM,
-        mlp_dim=MLP_DIM,
-        num_layers=NUM_LAYERS,
-        dropout=DROPOUT,
-        num_heads=NUM_HEADS,
-        num_experts=NUM_EXPERTS,
-        experts_per_token=EXPERTS_PER_TOKEN,
-        balance_loss_weight=BALANCE_LOSS_WEIGHT,
-    ).to(device)
-    model.lm_head.weight = model.token_embedding.weight
-
-    optimizer = optim.AdamW(model.parameters(), lr=LR, betas=(0.9, 0.95), weight_decay=0.1)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
-    loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
-
-    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter_KorQuAD_Finetuned"
-    os.makedirs(ckpt_dir, exist_ok=True)
-
-    for epoch in tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs"):
-        train_ppl = train_step(
-            model, train_loader, loss_fn, optimizer, device,
-            accumulation_steps=ACCUM_STEPS, use_amp=True
-        )
-        val_ppl, _ = test_step(
-            model, val_loader, loss_fn, device, use_amp=True
-        )
-        scheduler.step()
-        tqdm.write(f"[Epoch {epoch}] Train PPL: {train_ppl:.2f}  Val PPL: {val_ppl:.2f}")
-        torch.save(
-            model.state_dict(),
-            os.path.join(ckpt_dir, f"model_epoch_{epoch}.pt")
-        )
-
-
-if __name__ == "__main__":
-    main()
+model.save_pretrained(os.path.join(OUTPUT_DIR, "final"))
+sp.Save(os.path.join(OUTPUT_DIR, "final_spm.model"))

@@ -63,4 +63,4 @@ for fn in ["kowiki_sample.txt", "kowiki_morph.txt", "train_kotext_morph.txt"]:
     except FileNotFoundError:
         pass
 
-print("SentencePiece 모델 생성 완료 → spm_kowiki.model / spm_kowiki.vocab")
+print("SentencePiece 모델 생성 완료 → tokenizer.model / spm_kowiki.vocab")
