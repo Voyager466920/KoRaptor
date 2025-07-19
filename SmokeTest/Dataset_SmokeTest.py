@@ -1,7 +1,7 @@
 import math
 import sentencepiece as spm
 import torch
-from WorkStation.Datasets import Datasets
+from Pretrain.Datasets import Datasets
 
 # 설정
 FILE_PATH   = r"C:\junha\Git\BFG_2B\Datasets\train.txt"

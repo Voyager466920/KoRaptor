@@ -5,10 +5,10 @@ import shutil
 import json
 import torch
 import sentencepiece as spm
-from Raptor_config import RaptorConfig
-from Raptor_model import LatentMoE
+from configuration_raptor import RaptorConfig
+from modeling_raptor import RaptorModel
 
-CKPT = "raptor_original.pt"
+CKPT = r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter150M_Kowiki_AIHub_lr_1e_3\model_epoch_4.pt"
 SPM_MODEL = "tokenizer.model"
 OUT_DIR = "./raptor-hf"  # HF 포맷으로 저장될 디렉터리
 # REPO_ID 등 업로드 관련 코드는 전부 제거
@@ -46,8 +46,10 @@ cfg = RaptorConfig(
     balance_loss_weight=BALANCE_LOSS_WEIGHT,
 )
 
+cfg.architectures = ["RaptorModel"]
+
 # 3) 모델 생성 및 가중치 로드
-model = LatentMoE(cfg)
+model = RaptorModel(cfg)
 state = torch.load(CKPT, map_location="cpu")
 missing, unexpected = model.load_state_dict(state, strict=False)
 print(f"[Info] missing keys: {missing}")
@@ -57,6 +59,10 @@ print(f"[Info] unexpected keys: {unexpected}")
 os.makedirs(OUT_DIR, exist_ok=True)
 model.save_pretrained(OUT_DIR)  # → config.json, pytorch_model.bin or model.safetensors 생성
 cfg.save_pretrained(OUT_DIR)
+shutil.copy("configuration_raptor.py", os.path.join(OUT_DIR, "configuration_raptor.py"))
+shutil.copy("modeling_raptor.py",      os.path.join(OUT_DIR, "modeling_raptor.py"))
+# 빈 __init__.py 생성
+open(os.path.join(OUT_DIR, "__init__.py"), "w").close()
 
 # 5) 토크나이저 파일 복사 및 메타 생성
 shutil.copy(SPM_MODEL, os.path.join(OUT_DIR, "tokenizer.model"))

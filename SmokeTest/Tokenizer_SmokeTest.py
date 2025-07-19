@@ -4,7 +4,7 @@ import torch.optim as optim
 import sentencepiece as spm
 
 from Models.LatentGPT import LatentGPT
-from WorkStation.Datasets   import Datasets
+from Pretrain.Datasets   import Datasets
 from torch.utils.data       import DataLoader
 
 BATCH_SIZE  = 8
