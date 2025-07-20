@@ -5,3 +5,4 @@ Checkpoints/model_epoch_1.pt
 /Checkpoints/
 /HF_token.txt
 /HuggingFace_Upload/raptor-hf/
+/Finetune/lora_finetuned_koVast/
