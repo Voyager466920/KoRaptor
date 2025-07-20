@@ -177,7 +177,7 @@ class MoEBlock(nn.Module):
 
         output = out_flat.view(B, S, D)
         importance = gate_probs.sum(dim=(0, 1))
-        load = torch.zeros(self.num_experts, device=x.device)
+        load = torch.zeros(self.num_experts, device=x.device, dtype=x.dtype)
         load.scatter_add_(0, topk_idx_flat.reshape(-1),
                           torch.ones_like(topk_idx_flat.reshape(-1), dtype=x.dtype))
         balance_loss = 0.5 * (

@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader
 from transformers import get_linear_schedule_with_warmup
 from peft import get_peft_model, LoraConfig, TaskType
 from tqdm import tqdm
+import shutil
+
 
 from Finetune.LatentMoE import LatentMoE
 
@@ -133,4 +135,4 @@ for epoch in range(NUM_EPOCHS):
     model.save_pretrained(epoch_ckpt)
 
 model.save_pretrained(os.path.join(OUTPUT_DIR, "final"))
-sp.Save(os.path.join(OUTPUT_DIR, "final_spm.model"))
+shutil.copy(SPM_MODEL_PATH, os.path.join(OUTPUT_DIR, "final_spm.model"))
