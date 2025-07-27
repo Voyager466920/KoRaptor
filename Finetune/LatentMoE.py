@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
 
+from transformers import PretrainedConfig, PreTrainedModel
 
 
 def rotate_half(x):
@@ -247,6 +248,25 @@ class LatentMoE(nn.Module):
         x = self.norm(x)
         logits = self.lm_head(x)
         return logits, total_balance_loss / len(self.blocks)
+
+    def prepare_inputs_for_generation(self, input_ids, **kwargs):
+        return {"input_ids": input_ids}
+
+
+class LatentMoEShimConfig(PretrainedConfig):
+    model_type = "latent_moe_shim"
+
+
+class LatentMoEShim(PreTrainedModel):
+    config_class = LatentMoEShimConfig
+
+    def __init__(self, latent_model: LatentMoE):
+        config = LatentMoEShimConfig()
+        super().__init__(config)
+        self.latent = latent_model
+
+    def forward(self, input_ids, **kwargs):
+        return self.latent(input_ids)
 
     def prepare_inputs_for_generation(self, input_ids, **kwargs):
         return {"input_ids": input_ids}

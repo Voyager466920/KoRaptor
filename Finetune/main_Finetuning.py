@@ -9,28 +9,10 @@ from peft import LoraConfig, get_peft_model, TaskType
 from tqdm.auto import tqdm
 
 from Finetune.ChatDataset import ChatDataset
-from Finetune.LatentMoE import LatentMoE
+from Finetune.LatentMoE import LatentMoE, LatentMoEShim
 from Pretrain.Test_Step import test_step
 from Pretrain.Train_Step import train_step
 
-
-class LatentMoEShimConfig(PretrainedConfig):
-    model_type = "latent_moe_shim"
-
-
-class LatentMoEShim(PreTrainedModel):
-    config_class = LatentMoEShimConfig
-
-    def __init__(self, latent_model: LatentMoE):
-        config = LatentMoEShimConfig()
-        super().__init__(config)
-        self.latent = latent_model
-
-    def forward(self, input_ids, **kwargs):
-        return self.latent(input_ids)
-
-    def prepare_inputs_for_generation(self, input_ids, **kwargs):
-        return {"input_ids": input_ids}
 
 
 def collate_fn(batch):
