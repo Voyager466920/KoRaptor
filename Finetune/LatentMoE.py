@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
 
-from transformers import PretrainedConfig
 
 
 def rotate_half(x):
@@ -35,16 +34,10 @@ class MultiHeadLatentAttention(nn.Module):
         self._rope_cache = None
 
     def _build_rope_cache(self, seq_len, device, dtype):
-        if (
-            self._rope_cache is None
-            or self._rope_cache[0].size(0) < seq_len
-            or self._rope_cache[0].dtype != dtype
-        ):
-            t = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
-            freqs = torch.einsum("i,j->ij", t, self.inv_freq)
-            emb = torch.cat((freqs, freqs), dim=-1)
-            self._rope_cache = (emb.sin().to(dtype), emb.cos().to(dtype))
-        return self._rope_cache
+        t = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
+        freqs = torch.einsum("i,j->ij", t, self.inv_freq)  # (seq_len, head_dim/2)
+        emb = torch.cat((freqs, freqs), dim=-1)            # (seq_len, head_dim)
+        return emb.sin().to(dtype), emb.cos().to(dtype)
 
     def forward(self, x, kv_cache=None, *, attn_mask=None, use_cache=False):
         b, s, _ = x.size()
@@ -177,7 +170,7 @@ class MoEBlock(nn.Module):
 
         output = out_flat.view(B, S, D)
         importance = gate_probs.sum(dim=(0, 1))
-        load = torch.zeros(self.num_experts, device=x.device, dtype=x.dtype)
+        load = torch.zeros(self.num_experts, device=x.device)
         load.scatter_add_(0, topk_idx_flat.reshape(-1),
                           torch.ones_like(topk_idx_flat.reshape(-1), dtype=x.dtype))
         balance_loss = 0.5 * (
@@ -207,9 +200,6 @@ class LatentGPTBlock(nn.Module):
         x = x + moe_output
         return x, balance_loss
 
-
-class LatentMoEConfig(PretrainedConfig):
-    model_type = "latentmoe"
 class LatentMoE(nn.Module):
     def __init__(
         self,
@@ -223,9 +213,7 @@ class LatentMoE(nn.Module):
         num_heads: int = 16,
         num_experts: int = 6,
         experts_per_token: int = 2,
-        balance_loss_weight: float = 0.001,
-        pad_token_id=None,
-        eos_token_id=None
+        balance_loss_weight: float = 0.001
     ):
         super().__init__()
         self.token_embedding = nn.Embedding(vocab_size, embed_dim)
@@ -246,38 +234,19 @@ class LatentMoE(nn.Module):
         self.norm = RMSNorm(embed_dim)
         self.lm_head = nn.Linear(embed_dim, vocab_size, bias=False)
         self.balance_loss_weight = balance_loss_weight
-        self.config = LatentMoEConfig()
-        self.pad_token_id = pad_token_id
-        self.eos_token_id = eos_token_id
 
-    def forward(
-            self,
-            input_ids: torch.LongTensor,
-            attention_mask: None,
-            **kwargs
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input_ids: torch.LongTensor) -> (torch.Tensor, torch.Tensor):
         b, s = input_ids.size()
-
-        if attention_mask is None:
-            attention_mask = input_ids.ne(self.pad_token_id).long()
-
         x = self.token_embedding(input_ids) + self.positional_embedding[:, :s]
         x = self.dropout(x)
-
-        causal_mask = subsequent_mask(s, device=input_ids.device)
-
+        mask = subsequent_mask(s, device=input_ids.device)
         total_balance_loss = 0.0
         for blk in self.blocks:
-            x, balance_loss = blk(x, causal_mask)
+            x, balance_loss = blk(x, mask)
             total_balance_loss += balance_loss * self.balance_loss_weight
-
         x = self.norm(x)
         logits = self.lm_head(x)
+        return logits, total_balance_loss / len(self.blocks)
 
-        avg_balance_loss = total_balance_loss / len(self.blocks)
-        return logits, avg_balance_loss
-
-    def prepare_inputs_for_generation(self, input_ids, attention_mask=None, **kwargs):
-        if attention_mask is None:
-            attention_mask = input_ids.ne(self.pad_token_id).long()
-        return {"input_ids": input_ids, "attention_mask": attention_mask}
+    def prepare_inputs_for_generation(self, input_ids, **kwargs):
+        return {"input_ids": input_ids}
