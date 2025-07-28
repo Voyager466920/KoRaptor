@@ -155,14 +155,14 @@ class MoEBlock(nn.Module):
 class LatentGPTBlock(nn.Module):
     def __init__(self, embed_dim: int, latent_dim: int, mlp_dim: int, dropout: float = 0.1, num_heads: int = 16, num_experts: int = 6, experts_per_token: int = 2):
         super().__init__()
-        self.norm1 = RAMNorm(embed_dim)
+        self.norm1 = RMSNorm(embed_dim)
         self.attn = MultiHeadLatentAttention(
             dim=embed_dim,
             num_heads=num_heads,
             latent_dim=latent_dim,
             dropout=dropout
         )
-        self.norm2 = RAMNorm(embed_dim)
+        self.norm2 = RMSNorm(embed_dim)
         self.moe = MoEBlock(embed_dim, mlp_dim, num_experts, experts_per_token, dropout)
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
