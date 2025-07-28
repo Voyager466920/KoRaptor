@@ -10,7 +10,7 @@ from modeling_raptor import RaptorModel
 
 CKPT = r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter150M_Kowiki_AIHub_lr_1e_3\model_epoch_4.pt"
 SPM_MODEL = "tokenizer.model"
-OUT_DIR = "./raptor-hf"  # HF 포맷으로 저장될 디렉터리
+OUT_DIR = "raptor-hf"  # HF 포맷으로 저장될 디렉터리
 # REPO_ID 등 업로드 관련 코드는 전부 제거
 
 # 1) SentencePiece vocab size 로드
@@ -60,7 +60,7 @@ os.makedirs(OUT_DIR, exist_ok=True)
 model.save_pretrained(OUT_DIR)  # → config.json, pytorch_model.bin or model.safetensors 생성
 cfg.save_pretrained(OUT_DIR)
 shutil.copy("configuration_raptor.py", os.path.join(OUT_DIR, "configuration_raptor.py"))
-shutil.copy("modeling_raptor.py",      os.path.join(OUT_DIR, "modeling_raptor.py"))
+shutil.copy("modeling_raptor.py", os.path.join(OUT_DIR, "modeling_raptor.py"))
 # 빈 __init__.py 생성
 open(os.path.join(OUT_DIR, "__init__.py"), "w").close()
 
