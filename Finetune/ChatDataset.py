@@ -3,20 +3,35 @@ import json
 import torch
 from torch.utils.data import Dataset
 
+
 class ChatDataset(Dataset):
     def __init__(self, path_jsonl: str, tokenizer, max_seq_len: int):
         self.examples = []
         eos_piece = tokenizer.id_to_piece(tokenizer.eos_id())
+
         with open(path_jsonl, 'r', encoding='utf-8') as f:
             for line in f:
                 obj = json.loads(line)
                 prompt = obj['prompt']
-                resp   = obj['response']
-                text   = prompt + eos_piece + resp + eos_piece
-                ids    = tokenizer.EncodeAsIds(text)
+                resp = obj['response']
+                text = prompt + eos_piece + resp + eos_piece
+                ids = tokenizer.EncodeAsIds(text)
+
                 if len(ids) > max_seq_len:
                     ids = ids[-max_seq_len:]
-                self.examples.append(torch.tensor(ids, dtype=torch.long))
+
+                input_ids = torch.tensor(ids[:-1], dtype=torch.long)
+                labels = torch.tensor(ids[1:], dtype=torch.long)
+
+                # mask prompt + its EOS in labels to ignore prompt loss
+                prompt_piece_ids = tokenizer.EncodeAsIds(prompt + eos_piece)
+                prompt_len = min(len(prompt_piece_ids), labels.size(0))
+                labels[:prompt_len] = -100
+
+                self.examples.append({
+                    "input_ids": input_ids,
+                    "labels": labels,
+                })
 
     def __len__(self) -> int:
         return len(self.examples)
@@ -27,8 +42,4 @@ class ChatDataset(Dataset):
         return self._get_single(idx)
 
     def _get_single(self, i):
-        ids = self.examples[i]
-        return {
-            "input_ids": ids[:-1],
-            "labels":    ids[1:],
-        }
+        return self.examples[i]

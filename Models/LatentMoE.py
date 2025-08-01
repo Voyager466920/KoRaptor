@@ -92,14 +92,6 @@ class MLPBlock(nn.Module):
         x = self.dropout(x)
         return x
 
-class RMSNorm(nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-6):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(dim))
-        self.eps = eps
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.weight * x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
 def subsequent_mask(seq_len: int, device=None) -> torch.Tensor:
     mask = torch.tril(torch.ones((seq_len, seq_len), dtype=torch.bool, device=device))
     return mask.unsqueeze(0).unsqueeze(1)

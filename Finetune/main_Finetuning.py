@@ -33,11 +33,9 @@ def main():
     LR = 1e-3
     NUM_EPOCHS = 10
 
-    # 토크나이저 로드
     tokenizer = spm.SentencePieceProcessor()
     tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model")
 
-    # 데이터셋 & DataLoader
     train_dataset = ChatDataset(
         r"C:\junha\Datasets\KoRaptor_FineTuning\train_simplified.jsonl",
         tokenizer, MAX_SEQ_LEN
@@ -49,7 +47,6 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn)
 
-    # === 2) LatentMoE 생성 & 체크포인트 로드 ===
     base_model = LatentMoE(
         vocab_size=tokenizer.GetPieceSize(),
         max_seq_len=MAX_SEQ_LEN,
@@ -62,10 +59,8 @@ def main():
     ))
     base_model.to(device)
 
-    # Shim으로 감싸기
     shim = LatentMoEShim(base_model).to(device)
 
-    # === 3) PEFT + LoRA 설정 ===
     peft_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM,
         inference_mode=False,
@@ -78,12 +73,10 @@ def main():
     model = get_peft_model(shim, peft_config)
     model.to(device)
 
-    # 옵티마이저·스케줄러·손실함수
     optimizer = optim.AdamW(model.parameters(), lr=LR, betas=(0.9, 0.95), weight_decay=0.1)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
     loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
 
-    # === 4) 학습 루프 ===
     for epoch in tqdm(range(1, NUM_EPOCHS + 1)):
         model.train()
         train_ppl = train_step(
