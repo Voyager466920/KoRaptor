@@ -5,7 +5,7 @@
 ---
 language: Korean  
 Metrics: accuracy, perplexity  
-base_model: Voyager466920/KoRaptor  
+base_model: Voyager466920/KoRaptor  https://github.com/Voyager466920/KoRaptor/blob/main/README.md
 pipeline_tag: question-answering  
 ---
 # KoRaptor 150M
