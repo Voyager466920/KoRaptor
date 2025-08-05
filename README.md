@@ -1,7 +1,7 @@
 # KoRaptor
 
 <a href="https://huggingface.co/Voyager466920/KoRaptor_Chatbot" target="_blank">
-  <img src="https://img.shields.io/badge/HuggingFace-FF6F00?style=flat-square&logo=huggingface&logoColor=white" alt="Hugging Face Model"/>
+  <img src="https://img.shields.io/badge/HuggingFace-FFD21E?style=flat-square&logo=huggingface&logoColor=white" alt="Hugging Face Model"/>
 </a>
 
 # KoRaptor 150M
