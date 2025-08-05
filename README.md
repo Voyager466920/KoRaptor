@@ -11,6 +11,7 @@
 - **Parameters:** 150 million
 - **Base_model**: Voyager466920/KoRaptor
 
+
 - **Use case:** Conversational AI / Chatbot  
 - **Dataset:** Korean chatbot dataset from AI Hub  
 - **License:** Follows the license of the original dataset and model architecture
