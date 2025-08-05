@@ -1,13 +1,9 @@
 # KoRaptor
 
-[![Hugging Face](https://huggingface.co/badges/model-card/Voyager466920/KoRaptor_Chatbot.svg)](https://huggingface.co/Voyager466920/KoRaptor_Chatbot)
+<a href="https://huggingface.co/Voyager466920/KoRaptor_Chatbot" target="_blank">
+  <img src="https://img.shields.io/badge/HuggingFace-FF6F00?style=flat-square&logo=huggingface&logoColor=white" alt="Hugging Face Model"/>
+</a>
 
----
-language: Korean  
-Metrics: accuracy, perplexity  
-base_model: Voyager466920/KoRaptor  
-pipeline_tag: question-answering  
----
 # KoRaptor 150M
 ### 150M parameter model *pretrained / fine-tuned from SCRATCH* using *SINGLE GPU*(RTX 3090)
 
@@ -15,6 +11,7 @@ pipeline_tag: question-answering
 - **Language:** Pure Korean  
 - **Architecture:** LatentMoE  
 - **Parameters:** 150 million
+- **Base_model**: Voyager466920/KoRaptor
 
 - **Use case:** Conversational AI / Chatbot  
 - **Dataset:** Korean chatbot dataset from AI Hub  
