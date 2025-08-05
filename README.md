@@ -17,7 +17,7 @@
 - **License:** Follows the license of the original dataset and model architecture
 
 ## Usage
-You can easily run inferences using the provided `inference.py` script. No additional setup is required — simply load the model and start chatting in Korean.  
+You can easily run inferences using the provided `Inference.py` script. No additional setup is required — simply load the model and start chatting in Korean.  
 This model is incompatible with standard transformer loading methods (e.g., AutoModel). For simple inference, use the following code.
 
 ```python
@@ -31,4 +31,13 @@ script_path = hf_hub_download(
 ```
 
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/USPKsNLCRqE?si=AAiD-9Clo-IJnduv" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen> </iframe>
+<iframe 
+  width="560" 
+  height="315" 
+  src="https://www.youtube.com/embed/USPKsNLCRqE?si=AAiD-9Clo-IJnduv" 
+  title="YouTube video player" 
+  frameborder="0" 
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+  allowfullscreen>
+</iframe>
+
