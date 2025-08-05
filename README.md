@@ -3,6 +3,9 @@
 <a href="https://huggingface.co/Voyager466920/KoRaptor_Chatbot" target="_blank">
   <img src="https://img.shields.io/badge/HuggingFace-FFD21E?style=flat-square&logo=huggingface&logoColor=white" alt="Hugging Face Model"/>
 </a>
+<a href="https://www.youtube.com/watch?v=USPKsNLCRqE&si=AAiD-9Clo-IJnduv" target="_blank">
+  <img src="https://img.shields.io/badge/youtube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="Youtube video"/>
+</a>
 
 
 ## Key Features
@@ -31,6 +34,6 @@ script_path = hf_hub_download(
 ```
 
 
-https://www.youtube.com/watch?v=USPKsNLCRqE&si=AAiD-9Clo-IJnduv
+
 
 
