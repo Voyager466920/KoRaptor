@@ -1,11 +1,9 @@
-# KoRaptor
-
+# KoRaptor 150M
+### 150M parameter model *pretrained / fine-tuned from SCRATCH* using *SINGLE GPU*(RTX 3090)
 <a href="https://huggingface.co/Voyager466920/KoRaptor_Chatbot" target="_blank">
   <img src="https://img.shields.io/badge/HuggingFace-FFD21E?style=flat-square&logo=huggingface&logoColor=white" alt="Hugging Face Model"/>
 </a>
 
-# KoRaptor 150M
-### 150M parameter model *pretrained / fine-tuned from SCRATCH* using *SINGLE GPU*(RTX 3090)
 
 ## Key Features
 - **Language:** Pure Korean  
