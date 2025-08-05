@@ -28,5 +28,7 @@ script_path = hf_hub_download(
     repo_id="Voyager466920/KoRaptor_Chatbot",
     filename="Inference.py"
 )
+```
 
-runpy.run_path(script_path, run_name="__main__")
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/USPKsNLCRqE?si=AAiD-9Clo-IJnduv" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen> </iframe>
