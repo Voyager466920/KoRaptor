@@ -31,13 +31,6 @@ script_path = hf_hub_download(
 ```
 
 
-<iframe 
-  width="560" 
-  height="315" 
-  src="https://www.youtube.com/embed/USPKsNLCRqE?si=AAiD-9Clo-IJnduv" 
-  title="YouTube video player" 
-  frameborder="0" 
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-  allowfullscreen>
-</iframe>
+https://www.youtube.com/watch?v=USPKsNLCRqE&si=AAiD-9Clo-IJnduv
+
 
