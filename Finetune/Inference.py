@@ -138,9 +138,9 @@ def generate(
 if __name__ == "__main__":
     # 환경 설정
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    TOKENIZER_PATH = r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model"
-    BASE_CKPT_PATH = r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter150M_Kowiki_AIHub_lr_1e_3\model_epoch_4.pt"
-    LORA_CKPT_DIR = r"C:\junha\Git\BFG_2B\Checkpoints\lora_checkpoint\epoch_10"
+    TOKENIZER_PATH = r"C:\junha\Git\BFG_2B\Tokenizer\spm_wiki_book_owt.model"
+    BASE_CKPT_PATH = r"C:\junha\Git\BFG_2B\Checkpoints\EnRaptor150M_Wiki2_103_OWT_Book\model_epoch_1.pt"
+    LORA_CKPT_DIR = r"C:\junha\Git\BFG_2B\Checkpoints\EnRaptor_Chatbot_checkpoint\epoch_20"
 
     # 파인튜닝 때 썼던 설정과 동일하게
     MAX_SEQ_LEN = 256

@@ -4,11 +4,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import sentencepiece as spm
-from transformers import PreTrainedModel, PretrainedConfig
 from peft import LoraConfig, get_peft_model, TaskType
 from tqdm.auto import tqdm
 
-from Finetune.ChatDataset import ChatDataset
+from Finetune.KoChatDataset import KoChatDataset
 from Finetune.LatentMoE import LatentMoE, LatentMoEShim
 from Pretrain.Test_Step import test_step
 from Pretrain.Train_Step import train_step
@@ -36,11 +35,11 @@ def main():
     tokenizer = spm.SentencePieceProcessor()
     tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model")
 
-    train_dataset = ChatDataset(
+    train_dataset = KoChatDataset(
         r"C:\junha\Datasets\KoRaptor_FineTuning\train_simplified.jsonl",
         tokenizer, MAX_SEQ_LEN
     )
-    val_dataset = ChatDataset(
+    val_dataset = KoChatDataset(
         r"C:\junha\Datasets\KoRaptor_FineTuning\val_simplified.jsonl",
         tokenizer, MAX_SEQ_LEN
     )

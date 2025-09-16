@@ -16,7 +16,7 @@ BALANCE_LOSS_WEIGHT = 0.01
 # ────────────────────────────────────────────────────────────────────────
 
 # 1) adaptor_config 불러오기
-with open(r"C:\junha\Git\BFG_2B\Checkpoints\lora_checkpoint\epoch_10\adapter_config.json","r") as f:
+with open(r"/Checkpoints/KoRaptor150M_Chatbot_checkpoint\epoch_10\adapter_config.json", "r") as f:
     adaptor_cfg = json.load(f)
 
 

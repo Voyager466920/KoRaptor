@@ -12,26 +12,30 @@ class ChatDataset(Dataset):
         with open(path_jsonl, 'r', encoding='utf-8') as f:
             for line in f:
                 obj = json.loads(line)
-                prompt = obj['prompt']
-                resp = obj['response']
-                text = prompt + eos_piece + resp + eos_piece
-                ids = tokenizer.EncodeAsIds(text)
 
-                if len(ids) > max_seq_len:
-                    ids = ids[-max_seq_len:]
+                convs = obj["conversations"]
 
-                input_ids = torch.tensor(ids[:-1], dtype=torch.long)
-                labels = torch.tensor(ids[1:], dtype=torch.long)
+                for i in range(0, len(convs) - 1, 2):
+                    if convs[i]["from"] == "human" and convs[i + 1]["from"] == "gpt":
+                        prompt = convs[i]["value"]
+                        resp = convs[i + 1]["value"]
 
-                # mask prompt + its EOS in labels to ignore prompt loss
-                prompt_piece_ids = tokenizer.EncodeAsIds(prompt + eos_piece)
-                prompt_len = min(len(prompt_piece_ids), labels.size(0))
-                labels[:prompt_len] = -100
+                        text = prompt + eos_piece + resp + eos_piece
+                        ids = tokenizer.EncodeAsIds(text)
+                        if len(ids) > max_seq_len:
+                            ids = ids[-max_seq_len:]
 
-                self.examples.append({
-                    "input_ids": input_ids,
-                    "labels": labels,
-                })
+                        input_ids = torch.tensor(ids[:-1], dtype=torch.long)
+                        labels = torch.tensor(ids[1:], dtype=torch.long)
+
+                        prompt_piece_ids = tokenizer.EncodeAsIds(prompt + eos_piece)
+                        prompt_len = min(len(prompt_piece_ids), labels.size(0))
+                        labels[:prompt_len] = -100
+
+                        self.examples.append({
+                            "input_ids": input_ids,
+                            "labels": labels,
+                        })
 
     def __len__(self) -> int:
         return len(self.examples)

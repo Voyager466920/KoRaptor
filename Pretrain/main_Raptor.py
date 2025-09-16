@@ -100,38 +100,40 @@ def main():
     BALANCE_LOSS_WEIGHT = 0.01
 
     tokenizer = spm.SentencePieceProcessor()
-    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model")
+    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_wiki_book_owt.model")
     VOCAB_SIZE = tokenizer.GetPieceSize()
 
-    WIKI2_TRAIN = r"C:\junha\Datasets\WikiText2\train"
-    WIKI2_VAL = r"C:\junha\Datasets\WikiText2\val"
-    WIKI103_TRAIN = r"C:\junha\Datasets\WikiText103\train"
-    WIKI103_VAL = r"C:\junha\Datasets\WikiText103\val"
+    #WIKI2_TRAIN = r"C:\junha\Datasets\WikiText2\train"
+    #WIKI2_VAL = r"C:\junha\Datasets\WikiText2\val"
+    #WIKI103_TRAIN = r"C:\junha\Datasets\WikiText103\train"
+    #WIKI103_VAL = r"C:\junha\Datasets\WikiText103\val"
     OWT2_TRAIN = r"C:\junha\Datasets\OpenWebText2\train"
     OWT2_VAL = r"C:\junha\Datasets\OpenWebText2\val"
-    BOOK_TRAIN = r"C:\junha\Datasets\BookCorpus\train"
-    BOOK_VAL = r"C:\junha\Datasets\BookCorpus\val"
+    #BOOK_TRAIN = r"C:\junha\Datasets\BookCorpus\train"
+    #BOOK_VAL = r"C:\junha\Datasets\BookCorpus\val"
 
-    wiki2_train_map = load_from_disk(WIKI2_TRAIN)
-    wiki2_val_map = load_from_disk(WIKI2_VAL)
-    wiki103_train_map = load_from_disk(WIKI103_TRAIN)
-    wiki103_val_map = load_from_disk(WIKI103_VAL)
+    #wiki2_train_map = load_from_disk(WIKI2_TRAIN)
+    #wiki2_val_map = load_from_disk(WIKI2_VAL)
+    #wiki103_train_map = load_from_disk(WIKI103_TRAIN)
+    #wiki103_val_map = load_from_disk(WIKI103_VAL)
     owt2_train_map = load_from_disk(OWT2_TRAIN)
     owt2_val_map = load_from_disk(OWT2_VAL)
-    book_train_map = load_from_disk(BOOK_TRAIN)
-    book_val_map = load_from_disk(BOOK_VAL)
+    #book_train_map = load_from_disk(BOOK_TRAIN)
+    #book_val_map = load_from_disk(BOOK_VAL)
 
-    wiki2_train_stream = ShuffleStream(wiki2_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
-    wiki2_val_stream = ShuffleStream(wiki2_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
-    wiki103_train_stream = ShuffleStream(wiki103_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
-    wiki103_val_stream = ShuffleStream(wiki103_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    #wiki2_train_stream = ShuffleStream(wiki2_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    #wiki2_val_stream = ShuffleStream(wiki2_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    #wiki103_train_stream = ShuffleStream(wiki103_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    #wiki103_val_stream = ShuffleStream(wiki103_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
     owt2_train_stream = ShuffleStream(owt2_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
     owt2_val_stream = ShuffleStream(owt2_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
-    book_train_stream = ShuffleStream(book_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
-    book_val_stream = ShuffleStream(book_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    #book_train_stream = ShuffleStream(book_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    #book_val_stream = ShuffleStream(book_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
 
-    train_dataset = CombinedDataset(wiki2_train_stream, wiki103_train_stream, owt2_train_stream, book_train_stream)
-    val_dataset = CombinedDataset(wiki2_val_stream, wiki103_val_stream, owt2_val_stream, book_val_stream)
+    #train_dataset = CombinedDataset(wiki2_train_stream, wiki103_train_stream, owt2_train_stream, book_train_stream)
+    train_dataset = CombinedDataset(owt2_train_stream)
+    #val_dataset = CombinedDataset(wiki2_val_stream, wiki103_val_stream, owt2_val_stream, book_val_stream)
+    val_dataset = CombinedDataset(owt2_val_stream)
 
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
     val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
@@ -150,10 +152,10 @@ def main():
         balance_loss_weight=BALANCE_LOSS_WEIGHT,
     ).to(device)
     model.lm_head.weight = model.token_embedding.weight
-
+    pad_id = tokenizer.pad_id()
     optimizer = optim.AdamW(model.parameters(), lr=LR, betas=(0.9, 0.95), weight_decay=0.1)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
-    loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
+    loss_fn = nn.CrossEntropyLoss(ignore_index=pad_id, reduction="mean")
 
     ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints\Rapter150M_Wiki2_103_Book_Refined"
     os.makedirs(ckpt_dir, exist_ok=True)
