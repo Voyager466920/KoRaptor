@@ -34,9 +34,8 @@ def main():
 
     tokenizer = spm.SentencePieceProcessor()
     tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_wiki_book_owt.model")
-
     train_dataset = ChatDataset(
-        r"C:\junha\Datasets\chatalpaca-20k.json",
+        r"C:\junha\Datasets\chatalpaca-20k-simplified.jsonl",
         tokenizer, MAX_SEQ_LEN
     )
     pad_id = tokenizer.pad_id()
