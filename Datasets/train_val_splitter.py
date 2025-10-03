@@ -1,22 +1,20 @@
-#!/usr/bin/env python3
+from datasets import load_from_disk
 
-input_file = "kowikitext.train.txt"
-train_file = "train.txt"
-val_file = "val.txt"
-val_ratio = 0.02
+# 원본 데이터 경로
+dataset_path = r"C:\junha\Datasets\KoRaptor_Pretrain\Interview"
+# 저장할 경로
+out_path = r"C:\junha\Datasets\KoRaptor_Pretrain\Interview_split"
 
-from pathlib import Path
+# 불러오기
+ds = load_from_disk(dataset_path)
 
-lines = Path(input_file).read_text(encoding="utf-8").splitlines()
-n_val = int(len(lines) * val_ratio)
-val_lines = lines[:n_val]
-train_lines = lines[n_val:]
+# train/val 분리 (8:2)
+split = ds.train_test_split(test_size=0.2, seed=42)
 
-Path(train_file).parent.mkdir(parents=True, exist_ok=True)
-Path(val_file).parent.mkdir(parents=True, exist_ok=True)
+# 저장
+split.save_to_disk(out_path)
 
-Path(train_file).write_text("\n".join(train_lines), encoding="utf-8")
-Path(val_file).write_text("\n".join(val_lines), encoding="utf-8")
-
-print(f"Wrote {len(train_lines)} lines to {train_file}")
-print(f"Wrote {len(val_lines)} lines to {val_file}")
+print("총 샘플 수:", len(ds))
+print("train:", len(split["train"]))
+print("validation:", len(split["test"]))
+print("저장 경로:", out_path)

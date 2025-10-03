@@ -54,7 +54,7 @@ def main():
         num_experts=6, experts_per_token=2, balance_loss_weight=0.01,
     )
     base_model.load_state_dict(torch.load(
-        r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter150M_Kowiki_AIHub_lr_1e_3\model_epoch_4.pt"
+        r"/Checkpoints/A_HuggingFace_KoRapter150M_Kowiki_AIHub_lr_1e_3\model_epoch_4.pt"
     ))
     base_model.to(device)
 

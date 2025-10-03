@@ -105,17 +105,25 @@ def main():
 
     kowiki_train_map = load_from_disk(r"C:\junha\Datasets\KoWiki_TrainVal\train")
     kowiki_val_map = load_from_disk(r"C:\junha\Datasets\KoWiki_TrainVal\val")
-    koreantext_train_map = load_from_disk(r"C:\junha\Datasets\KoreanText\Train")
-    koreantext_val_map = load_from_disk(r"C:\junha\Datasets\KoreanText\Test")
+    koreantext_train_map = load_from_disk(r"C:\junha\Datasets\KoreanText\train")
+    koreantext_val_map = load_from_disk(r"C:\junha\Datasets\KoreanText\val")
+    interview_train_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\Interview\train")
+    interview_val_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\Interview\val")
+    news_train_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\KoRaptor_news\train")
+    news_val_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\KoRaptor_news\val")
 
     kowiki_train_stream = ShuffleStream(kowiki_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
     koreantext_train_stream = ShuffleStream(koreantext_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    interview_train_stream = ShuffleStream(interview_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    news_train_stream = ShuffleStream(news_train_map, tokenizer, MAX_SEQ_LEN, STRIDE)
 
     kowiki_val_stream = ShuffleStream(kowiki_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
     koreantext_val_stream = ShuffleStream(koreantext_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    interview_val_stream = ShuffleStream(interview_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
+    news_val_stream = ShuffleStream(news_val_map, tokenizer, MAX_SEQ_LEN, STRIDE)
 
-    train_dataset = CombinedDataset(kowiki_train_stream, koreantext_train_stream)
-    val_dataset = CombinedDataset(kowiki_val_stream, koreantext_val_stream)
+    train_dataset = CombinedDataset(kowiki_train_stream, koreantext_train_stream, interview_train_stream, news_train_stream)
+    val_dataset = CombinedDataset(kowiki_val_stream, koreantext_val_stream, interview_val_stream, news_val_stream)
 
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
     val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
@@ -139,7 +147,7 @@ def main():
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
     loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
 
-    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter150M_Kowiki_AIHub_lr_1e_3"
+    ckpt_dir = r"/Checkpoints/KoRapter150M_Kowiki_251004"
     os.makedirs(ckpt_dir, exist_ok=True)
 
     epoch_iter = tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs")
