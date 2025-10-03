@@ -1,23 +1,17 @@
 from datasets import load_from_disk
-import pandas as pd
 
-# 1) 로컬에서 KorQuAD 불러오기
-train_ds = load_from_disk(r"C:\junha\Datasets\KorQuAD\v1.0\train")
-val_ds = load_from_disk(r"C:\junha\Datasets\KorQuAD\v1.0\val")
+# 저장한 경로 지정
+textbooks_path = r"C:\junha\Datasets\KoreanTextbooks_all_dedup\train"
+petite_path = r"C:\junha\Datasets\KoreanPetitions\train"
 
-# 2) 전체 개수 확인
-print(f"Train examples: {len(train_ds)}")
-print(f"Validation examples: {len(val_ds)}")
+# 불러오기
+textbooks_ds = load_from_disk(textbooks_path)
+petite_ds = load_from_disk(petite_path)
 
-# 3) 첫 3개 샘플 간단히 출력
+print("tiny-textbooks 샘플 3개:")
 for i in range(3):
-    ex = train_ds[i]
-    print(f"\n=== Train Sample {i} ===")
-    print("Question :", ex["question"])
-    print("Context  :", ex["context"][:200].replace("\n", " "), "...")
-    print("Answer   :", ex["answers"]["text"])
+    print(textbooks_ds[i])
 
-# 4) (선택) pandas DataFrame 으로 살펴보기
-df = pd.DataFrame(train_ds[:10])
-print("\nDataFrame preview:")
-print(df[["question", "context", "answers"]].head())
+print("\npetite 샘플 3개:")
+for i in range(3):
+    print(petite_ds[i])
