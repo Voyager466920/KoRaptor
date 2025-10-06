@@ -235,7 +235,8 @@ class LatentMoE(nn.Module):
 
     def forward(self, input_ids: torch.LongTensor) -> (torch.Tensor, torch.Tensor):
         b, s = input_ids.size()
-        x = self.token_embedding(input_ids) + self.positional_embedding[:, :s]
+        #x = self.token_embedding(input_ids) + self.positional_embedding[:, :s]
+        x = self.token_embedding(input_ids)
         x = self.dropout(x)
         mask = subsequent_mask(s, device=input_ids.device)
         total_balance_loss = 0.0

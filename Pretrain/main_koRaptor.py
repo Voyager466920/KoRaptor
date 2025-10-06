@@ -100,13 +100,13 @@ def main():
     BALANCE_LOSS_WEIGHT = 0.01
 
     tokenizer = spm.SentencePieceProcessor()
-    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model")
+    tokenizer.Load(r"C:\junha\Git\BFG_2B\Tokenizer\spm_koraptor.model")
     VOCAB_SIZE = tokenizer.GetPieceSize()
 
-    kowiki_train_map = load_from_disk(r"C:\junha\Datasets\KoWiki_TrainVal\train")
-    kowiki_val_map = load_from_disk(r"C:\junha\Datasets\KoWiki_TrainVal\val")
-    koreantext_train_map = load_from_disk(r"C:\junha\Datasets\KoreanText\train")
-    koreantext_val_map = load_from_disk(r"C:\junha\Datasets\KoreanText\val")
+    kowiki_train_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\KoWiki_TrainVal\train")
+    kowiki_val_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\KoWiki_TrainVal\val")
+    koreantext_train_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\KoreanText\train")
+    koreantext_val_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\KoreanText\val")
     interview_train_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\Interview\train")
     interview_val_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\Interview\val")
     news_train_map = load_from_disk(r"C:\junha\Datasets\KoRaptor_Pretrain\KoRaptor_news\train")
@@ -145,7 +145,7 @@ def main():
 
     optimizer = optim.AdamW(model.parameters(), lr=LR, betas=(0.9, 0.95), weight_decay=0.1)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
-    loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
+    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_id(), reduction="mean")
 
     ckpt_dir = r"/Checkpoints/KoRapter150M_Kowiki_251004"
     os.makedirs(ckpt_dir, exist_ok=True)

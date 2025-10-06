@@ -4,7 +4,7 @@ import pyarrow as pa
 import pyarrow.ipc as ipc
 from datasets import load_from_disk
 
-dataset_path = r"C:\junha\Datasets\KoRaptor_Pretrain\KoWiki_TrainVal\train"
+dataset_path = r"C:\junha\Datasets\KoRaptor_FineTuning\KorQuAD_2_0\train"
 
 def open_arrow_first_shard(root):
     arrow_files = sorted(glob.glob(os.path.join(root, "**", "*.arrow"), recursive=True))
@@ -46,5 +46,5 @@ for i in range(n):
     for name in names:
         val = table[name][i].as_py()
         if isinstance(val, str):
-            val = val.replace("\n", "\\n")[:1000]
+            val = val.replace("\n", "\\n")
         print(f"{name}: {val}")
