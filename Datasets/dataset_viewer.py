@@ -4,7 +4,7 @@ import pyarrow as pa
 import pyarrow.ipc as ipc
 from datasets import load_from_disk
 
-dataset_path = r"C:\junha\Datasets\KoRaptor_FineTuning\KorQuAD_2_0\train"
+dataset_path = r"C:\junha\Datasets\KoRaptor_FineTuning\KLUE\ner\train"
 
 def open_arrow_first_shard(root):
     arrow_files = sorted(glob.glob(os.path.join(root, "**", "*.arrow"), recursive=True))
