@@ -1,13 +1,13 @@
 import torch
 import sentencepiece as spm
 from collections import Counter
-from Models.LatentMoE import LatentMoE
+from Finetune.LatentMoE import LatentMoE
 
-checkpoint_path = r"C:\Checkpoints\KoRapter150M_Kowiki_251004\model_epoch_2.pt"
-tokenizer_model_path = r"C:\junha\Git\BFG_2B\Tokenizer\spm_koraptor.model"
+checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\A_HuggingFace_KoRapter150M_Kowiki_AIHub_lr_1e_3\model_epoch_5.pt"
+tokenizer_model_path = r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model"
 prompt = "대통령은"
 max_length = 100
-temperature = 0.7
+temperature = 0.9
 top_k = 10
 top_p = 0.9
 repetition_penalty = 1.2

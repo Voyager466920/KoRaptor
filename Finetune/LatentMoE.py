@@ -6,6 +6,7 @@ from typing import Tuple
 from transformers import PretrainedConfig, PreTrainedModel
 
 
+
 def rotate_half(x):
     x1, x2 = x[..., ::2], x[..., 1::2]
     return torch.stack((-x2, x1), dim=-1).flatten(-2)
@@ -35,10 +36,17 @@ class MultiHeadLatentAttention(nn.Module):
         self._rope_cache = None
 
     def _build_rope_cache(self, seq_len, device, dtype):
-        t = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
-        freqs = torch.einsum("i,j->ij", t, self.inv_freq)  # (seq_len, head_dim/2)
-        emb = torch.cat((freqs, freqs), dim=-1)            # (seq_len, head_dim)
-        return emb.sin().to(dtype), emb.cos().to(dtype)
+        if (
+                self._rope_cache is None
+                or self._rope_cache[0].size(0) < seq_len
+                or self._rope_cache[0].dtype != dtype
+        ):
+            t = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
+            freqs = torch.einsum("i,j->ij", t, self.inv_freq)
+            emb = torch.cat((freqs, freqs), dim=-1)
+            self._rope_cache = (emb.sin().to(dtype), emb.cos().to(dtype))
+        sin, cos = self._rope_cache
+        return sin[:seq_len], cos[:seq_len]
 
     def forward(self, x, kv_cache=None, *, attn_mask=None, use_cache=False):
         b, s, _ = x.size()
@@ -87,17 +95,12 @@ class MLPBlock(nn.Module):
         x = self.dropout(x)
         return x
 
-class RMSNorm(nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-6):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(dim))
-        self.eps = eps
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.weight * x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
 def subsequent_mask(seq_len: int, device=None) -> torch.Tensor:
-    mask = torch.tril(torch.ones((seq_len, seq_len), dtype=torch.bool, device=device))
-    return mask.unsqueeze(0).unsqueeze(1)
+    return torch.triu(
+        torch.ones((seq_len, seq_len), dtype=torch.bool, device=device),
+        diagonal=1
+    ).unsqueeze(0).unsqueeze(1)
+
 
 class Expert(nn.Module):
     def __init__(self, embed_dim: int, mlp_dim: int, dropout: float = 0.1):
@@ -236,21 +239,21 @@ class LatentMoE(nn.Module):
         self.lm_head = nn.Linear(embed_dim, vocab_size, bias=False)
         self.balance_loss_weight = balance_loss_weight
 
-    def forward(self, input_ids: torch.LongTensor) -> (torch.Tensor, torch.Tensor):
+    def forward(self, input_ids: torch.LongTensor, attn_mask: torch.Tensor = None):
         b, s = input_ids.size()
         x = self.token_embedding(input_ids) + self.positional_embedding[:, :s]
         x = self.dropout(x)
-        mask = subsequent_mask(s, device=input_ids.device)
+
+        if attn_mask is None:
+            attn_mask = subsequent_mask(s, device=input_ids.device)  # True=mask
+
         total_balance_loss = 0.0
         for blk in self.blocks:
-            x, balance_loss = blk(x, mask)
+            x, balance_loss = blk(x, attn_mask)
             total_balance_loss += balance_loss * self.balance_loss_weight
         x = self.norm(x)
         logits = self.lm_head(x)
         return logits, total_balance_loss / len(self.blocks)
-
-    def prepare_inputs_for_generation(self, input_ids, **kwargs):
-        return {"input_ids": input_ids}
 
 
 class LatentMoEShimConfig(PretrainedConfig):
