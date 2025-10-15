@@ -10,7 +10,7 @@ from tqdm.auto import tqdm
 from collections import Counter
 
 from Finetune.KorQuAD_Dataset import KorQuADDataset
-from Finetune.LatentMoE import LatentMoE, LatentMoEShim, subsequent_mask
+from Finetune.LatentMoE import LatentMoE, LatentMoEShim
 from Finetune.Test_Step import test_step
 from Finetune.Train_Step import train_step
 
@@ -18,14 +18,24 @@ def set_seed(s=42):
     random.seed(s); np.random.seed(s); torch.manual_seed(s)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(s)
 
-def collate_fn_builder(pad_id):
+def collate_fn_builder(pad_id, max_len):
     def _fn(b):
         xs = [x["input_ids"] for x in b]
         ys = [x["labels"] for x in b]
         xs = nn.utils.rnn.pad_sequence(xs, batch_first=True, padding_value=pad_id)
         ys = nn.utils.rnn.pad_sequence(ys, batch_first=True, padding_value=-100)
+        if xs.size(1) < max_len:
+            pad_w = max_len - xs.size(1)
+            xs = torch.cat([xs, torch.full((xs.size(0), pad_w), pad_id, dtype=xs.dtype)], dim=1)
+            ys = torch.cat([ys, torch.full((ys.size(0), pad_w), -100, dtype=ys.dtype)], dim=1)
+        elif xs.size(1) > max_len:
+            xs = xs[:, :max_len]
+            ys = ys[:, :max_len]
         return {"input_ids": xs, "labels": ys}
     return _fn
+
+
+
 
 def _norm(s):
     return "".join((s or "").split())
@@ -48,7 +58,6 @@ def em_f1_str(pred, golds):
         if f1 > best_f1: best_f1 = f1
     return em, best_f1
 
-# ===== 디코딩 하이퍼(EM/F1에 유리하게 짧고 보수적으로) =====
 DEC_TEMPERATURE = 0.7
 DEC_TOP_K = 20
 DEC_TOP_P = 0.9
@@ -56,20 +65,6 @@ DEC_REP_PEN = 1.2
 DEC_NGRAM = 3
 DEC_MAX_NEW = 8
 NEG_INF = -1e9
-
-# ===== 모델에 attn_mask를 항상 주입하는 래퍼 =====
-class MaskedModel(nn.Module):
-    def __init__(self, base_model: nn.Module, pad_id: int):
-        super().__init__()
-        self.base = base_model
-        self.pad_id = pad_id
-    def forward(self, input_ids, **kwargs):
-        x = input_ids
-        pad_m  = (x == self.pad_id).unsqueeze(1).unsqueeze(2)           # [B,1,1,S] (True=mask)
-        causal = subsequent_mask(x.size(1), device=x.device)            # [1,1,S,S]
-        attn_mask = pad_m | causal                                      # 브로드캐스트 OR
-        kwargs["attn_mask"] = attn_mask
-        return self.base(input_ids, **kwargs)
 
 def _enforce_no_repeat_ngram(logits, generated, n):
     if generated.size(1) < n:
@@ -89,7 +84,6 @@ def sample_decode(model, tok, prompt_ids, eos_id, pad_id, dev, max_seq_len,
                   rep_pen=DEC_REP_PEN, no_repeat_ngram=DEC_NGRAM, max_new_tokens=DEC_MAX_NEW):
     prompt_ids = prompt_ids[-(max_seq_len - 1):]
     ids = torch.tensor([prompt_ids], dtype=torch.long, device=dev)
-    # 특수 토큰 블록리스트
     ban_ids = set()
     for name in ("<pad>", "<s>", "</s>", "<unk>"):
         try:
@@ -97,25 +91,16 @@ def sample_decode(model, tok, prompt_ids, eos_id, pad_id, dev, max_seq_len,
             if tid >= 0: ban_ids.add(int(tid))
         except: pass
     ban_ids.add(int(pad_id))
-
     for _ in range(max_new_tokens):
         cur = ids[:, -max_seq_len:]
         if cur.size(1) < max_seq_len:
             pad = torch.full((1, max_seq_len - cur.size(1)), pad_id, dtype=torch.long, device=dev)
             cur = torch.cat([pad, cur], dim=1)
-
-        # 마스크 생성 (좌패딩 + causal)
-        pad_m  = (cur == pad_id).unsqueeze(1).unsqueeze(2)          # [B,1,1,S]
-        causal = subsequent_mask(cur.size(1), device=cur.device)    # [1,1,S,S]
-        attn_mask = pad_m | causal
-
-        out = model(cur, attn_mask=attn_mask)
+        out = model(cur)
         logits = out[0] if isinstance(out, tuple) else out
         logits = logits[:, -1, :] / max(temperature, 1e-6)
-
         if ban_ids:
             logits[:, list(ban_ids)] = NEG_INF
-
         if top_k and top_k > 0:
             v, _ = torch.topk(logits, top_k)
             logits[logits < v[:, -1].unsqueeze(-1)] = NEG_INF
@@ -128,12 +113,10 @@ def sample_decode(model, tok, prompt_ids, eos_id, pad_id, dev, max_seq_len,
                 cutoff_pos = torch.argmax(cutoff_mask.int(), dim=-1).item()
                 sorted_logits[:, cutoff_pos+1:] = NEG_INF
             logits = torch.scatter(torch.full_like(logits, NEG_INF), dim=-1, index=sorted_idx, src=sorted_logits)
-
         counts = Counter(ids.view(-1).tolist())
         for tid, c in counts.items():
             if c > 1:
                 logits[:, int(tid)] /= (rep_pen ** (c - 1))
-
         logits = _enforce_no_repeat_ngram(logits, ids, no_repeat_ngram)
         probs = torch.softmax(logits, dim=-1)
         nxt = torch.argmax(logits, dim=-1, keepdim=True) if (not torch.isfinite(probs).all() or probs.sum() <= 0) else torch.multinomial(probs, num_samples=1)
@@ -142,6 +125,7 @@ def sample_decode(model, tok, prompt_ids, eos_id, pad_id, dev, max_seq_len,
             break
     gen = ids[0].tolist()[len(prompt_ids):]
     return gen
+
 
 def eval_em_f1(model, ds, tok, dev, pad_id, max_new_tokens=DEC_MAX_NEW, log_every=500, max_logs=10):
     if hasattr(tok, "eos_id") and tok.eos_id() != -1:
@@ -223,8 +207,10 @@ def main():
 
     train_dataset = KorQuADDataset([KorQuADV1_Train], tokenizer, MAX_SEQ_LEN)
     val_dataset = KorQuADDataset([KorQuADV1_Val], tokenizer, MAX_SEQ_LEN)
-    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn_builder(pad_id))
-    val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn_builder(pad_id))
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,
+                                  collate_fn=collate_fn_builder(pad_id, MAX_SEQ_LEN))
+    val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False,
+                                collate_fn=collate_fn_builder(pad_id, MAX_SEQ_LEN))
 
     base_model = LatentMoE(vocab_size=tokenizer.GetPieceSize(), max_seq_len=MAX_SEQ_LEN, embed_dim=640, latent_dim=160, mlp_dim=1536, num_layers=8, num_heads=8, dropout=0.1, num_experts=6, experts_per_token=2, balance_loss_weight=0.01)
     base_model.load_state_dict(torch.load(Pretrained_Model, map_location="cpu"))
@@ -235,7 +221,7 @@ def main():
                      target_modules=["q_proj","dkv_proj","up_proj_k","up_proj_v","out_proj","fc1","fc2"])
     peft_model = get_peft_model(shim, cfg).to(device)
 
-    model = MaskedModel(peft_model, pad_id).to(device)
+    model = peft_model.to(device)
 
     optimizer = AdamW(model.parameters(), lr=LR, betas=(0.9,0.95), weight_decay=0.1)
     scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)

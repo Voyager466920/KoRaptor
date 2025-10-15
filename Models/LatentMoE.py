@@ -246,3 +246,4 @@ class LatentMoE(nn.Module):
         x = self.norm(x)
         logits = self.lm_head(x)
         return logits, total_balance_loss / len(self.blocks)
+
