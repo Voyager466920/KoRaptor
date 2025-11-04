@@ -28,8 +28,8 @@ class StreamingDataset(IterableDataset):
             L = len(ids)
 
             if L <= self.max_seq_len:
-                input_ids = ids[:-1] + [self.pad_id] * (self.max_seq_len - L + 1)
-                labels = ids[1:] + [self.pad_id] * (self.max_seq_len - L + 1)
+                input_ids = ids[:-1] + [self.pad_id] * (self.max_seq_len - (L - 1))
+                labels = ids[1:] + [self.pad_id] * (self.max_seq_len - (L - 1))
                 yield {
                     "input_ids": torch.tensor(input_ids, dtype=torch.long),
                     "labels": torch.tensor(labels, dtype=torch.long),

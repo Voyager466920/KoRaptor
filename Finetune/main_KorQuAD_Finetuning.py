@@ -34,9 +34,6 @@ def collate_fn_builder(pad_id, max_len):
         return {"input_ids": xs, "labels": ys}
     return _fn
 
-
-
-
 def _norm(s):
     return "".join((s or "").split())
 
@@ -58,8 +55,8 @@ def em_f1_str(pred, golds):
         if f1 > best_f1: best_f1 = f1
     return em, best_f1
 
-DEC_TEMPERATURE = 0.7
-DEC_TOP_K = 20
+DEC_TEMPERATURE = 0.8
+DEC_TOP_K = 10
 DEC_TOP_P = 0.9
 DEC_REP_PEN = 1.2
 DEC_NGRAM = 3
@@ -79,53 +76,29 @@ def _enforce_no_repeat_ngram(logits, generated, n):
     return logits
 
 @torch.no_grad()
-def sample_decode(model, tok, prompt_ids, eos_id, pad_id, dev, max_seq_len,
-                  temperature=DEC_TEMPERATURE, top_k=DEC_TOP_K, top_p=DEC_TOP_P,
-                  rep_pen=DEC_REP_PEN, no_repeat_ngram=DEC_NGRAM, max_new_tokens=DEC_MAX_NEW):
-    prompt_ids = prompt_ids[-(max_seq_len - 1):]
-    ids = torch.tensor([prompt_ids], dtype=torch.long, device=dev)
-    ban_ids = set()
-    for name in ("<pad>", "<s>", "</s>", "<unk>"):
-        try:
-            tid = tok.PieceToId(name)
-            if tid >= 0: ban_ids.add(int(tid))
-        except: pass
-    ban_ids.add(int(pad_id))
+def beam_search_decode(model, tok, prompt_ids, eos_id, pad_id, dev, max_seq_len,
+                       beam_width=1, alpha=0.7, max_new_tokens=8, temperature=0.0):
+    prompt_ids = prompt_ids[-max_seq_len:]
+    input_ids = torch.tensor([prompt_ids], dtype=torch.long, device=dev)
+    beams = [(input_ids, 0.0)]
     for _ in range(max_new_tokens):
-        cur = ids[:, -max_seq_len:]
-        if cur.size(1) < max_seq_len:
-            pad = torch.full((1, max_seq_len - cur.size(1)), pad_id, dtype=torch.long, device=dev)
-            cur = torch.cat([pad, cur], dim=1)
-        out = model(cur)
-        logits = out[0] if isinstance(out, tuple) else out
-        logits = logits[:, -1, :] / max(temperature, 1e-6)
-        if ban_ids:
-            logits[:, list(ban_ids)] = NEG_INF
-        if top_k and top_k > 0:
-            v, _ = torch.topk(logits, top_k)
-            logits[logits < v[:, -1].unsqueeze(-1)] = NEG_INF
-        if top_p and top_p < 1.0:
-            sorted_logits, sorted_idx = torch.sort(logits, descending=True)
-            probs = torch.softmax(sorted_logits, dim=-1)
-            cumulative_probs = torch.cumsum(probs, dim=-1)
-            cutoff_mask = cumulative_probs > top_p
-            if cutoff_mask.any():
-                cutoff_pos = torch.argmax(cutoff_mask.int(), dim=-1).item()
-                sorted_logits[:, cutoff_pos+1:] = NEG_INF
-            logits = torch.scatter(torch.full_like(logits, NEG_INF), dim=-1, index=sorted_idx, src=sorted_logits)
-        counts = Counter(ids.view(-1).tolist())
-        for tid, c in counts.items():
-            if c > 1:
-                logits[:, int(tid)] /= (rep_pen ** (c - 1))
-        logits = _enforce_no_repeat_ngram(logits, ids, no_repeat_ngram)
-        probs = torch.softmax(logits, dim=-1)
-        nxt = torch.argmax(logits, dim=-1, keepdim=True) if (not torch.isfinite(probs).all() or probs.sum() <= 0) else torch.multinomial(probs, num_samples=1)
-        ids = torch.cat([ids, nxt], dim=1)
-        if int(nxt.item()) == int(eos_id):
+        candidates = []
+        for seq, score in beams:
+            cur = seq[:, -max_seq_len:]
+            out = model(cur)
+            logits = out[0] if isinstance(out, tuple) else out
+            logits = logits[:, -1, :] / max(temperature, 1e-6)
+            log_probs = torch.log_softmax(logits, dim=-1).squeeze(0)
+            topk_log_probs, topk_indices = torch.topk(log_probs, beam_width)
+            for lp, idx in zip(topk_log_probs.tolist(), topk_indices.tolist()):
+                new_seq = torch.cat((seq, torch.tensor([[idx]], device=dev)), dim=1)
+                new_score = score + lp / (new_seq.size(1) ** alpha)
+                candidates.append((new_seq, new_score))
+        beams = sorted(candidates, key=lambda x: x[1], reverse=True)[:beam_width]
+        if all(seq[0, -1].item() == eos_id for seq, _ in beams):
             break
-    gen = ids[0].tolist()[len(prompt_ids):]
-    return gen
-
+    best_seq = beams[0][0]
+    return best_seq[0].tolist()[len(prompt_ids):]
 
 def eval_em_f1(model, ds, tok, dev, pad_id, max_new_tokens=DEC_MAX_NEW, log_every=500, max_logs=10):
     if hasattr(tok, "eos_id") and tok.eos_id() != -1:
@@ -140,9 +113,8 @@ def eval_em_f1(model, ds, tok, dev, pad_id, max_new_tokens=DEC_MAX_NEW, log_ever
     for i in range(n):
         ex = ds.samples[i]
         p_ids = list(tok.EncodeAsIds(ex["prompt"]))
-        gen = sample_decode(model, tok, p_ids, eos_id, pad_id, dev, max_len,
-                            temperature=DEC_TEMPERATURE, top_k=DEC_TOP_K, top_p=DEC_TOP_P,
-                            rep_pen=DEC_REP_PEN, no_repeat_ngram=DEC_NGRAM, max_new_tokens=max_new_tokens)
+        gen = beam_search_decode(model, tok, p_ids, eos_id, pad_id, dev, max_len,
+                                 beam_width=3, alpha=0.7, max_new_tokens=max_new_tokens)
         pred = tok.DecodeIds(gen)
         golds = [ex["answer"]]
         em, f1 = em_f1_str(pred, golds)
@@ -188,7 +160,7 @@ def main():
     EPOCHS = 10
     ACCUM_STEPS = 1
 
-    TOKENIZER_PATH = r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model"
+    TOKENIZER_PATH = r"C:\junha\Git\BFG_2B\Tokenizer\spm_koraptor.model"
     KorQuADV1_Train = r"C:\junha\Datasets\KoRaptor_FineTuning\KorQuAD_1_0\train"
     KorQuADV1_Val   = r"C:\junha\Datasets\KoRaptor_FineTuning\KorQuAD_1_0\val"
     Pretrained_Model = r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter150M_Kowiki_251004\model_epoch_4.pt"

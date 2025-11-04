@@ -18,6 +18,8 @@ def train_step(
     total_ce_sum = 0.0
     total_tok = 0
 
+    ignore_index = getattr(loss_fn, "ignore_index", -100)
+
     for step, batch in enumerate(dataloader, start=1):
         inputs = batch["input_ids"].to(device)
         labels = batch["labels"].to(device)
@@ -29,13 +31,8 @@ def train_step(
             labels_flat = labels.view(-1)
 
             ce_loss = loss_fn(logits_flat, labels_flat)
-            num_tok = (labels_flat != 0).sum().item()
-            if num_tok == 0:
-                continue
 
-            ce_sum = ce_loss.item() * num_tok
-            balance_weight = getattr(model, "balance_loss_weight", 0.0)
-            loss = (ce_loss + balance_loss * balance_weight) / accumulation_steps
+            loss = (ce_loss + (balance_loss if isinstance(balance_loss, torch.Tensor) else 0.0)) / accumulation_steps
 
         scaler.scale(loss).backward()
         if step % accumulation_steps == 0:
@@ -45,7 +42,12 @@ def train_step(
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
 
-        total_ce_sum += ce_sum
+        valid = labels_flat != ignore_index
+        num_tok = valid.sum().item()
+        if num_tok == 0:
+            continue
+
+        total_ce_sum += ce_loss.item() * num_tok
         total_tok += num_tok
 
     if total_tok == 0:

@@ -14,6 +14,8 @@ def test_step(
     total_tok = 0
     correct_tok = 0
 
+    ignore_index = getattr(loss_fn, "ignore_index", -100)
+
     with torch.no_grad():
         for batch in dataloader:
             inputs = batch["input_ids"].to(device)
@@ -27,7 +29,9 @@ def test_step(
             labels_flat = labels.view(-1)
 
             batch_ce = loss_fn(logits_flat, labels_flat)
-            num_tok = (labels_flat != 0).sum().item()
+
+            valid = labels_flat != ignore_index
+            num_tok = valid.sum().item()
             if num_tok == 0:
                 continue
 
@@ -35,8 +39,7 @@ def test_step(
             total_tok += num_tok
 
             preds_flat = logits_flat.argmax(dim=1)
-            mask = labels_flat != 0
-            correct_tok += (preds_flat[mask] == labels_flat[mask]).sum().item()
+            correct_tok += (preds_flat[valid] == labels_flat[valid]).sum().item()
 
     if total_tok == 0:
         return math.exp(1.0), 0.0

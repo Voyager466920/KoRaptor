@@ -3,16 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
 
-
-
 def rotate_half(x):
     x1, x2 = x[..., ::2], x[..., 1::2]
     return torch.stack((-x2, x1), dim=-1).flatten(-2)
 
-
 def apply_rope(x, sin, cos):
     return (x * cos) + (rotate_half(x) * sin)
-
 
 class MultiHeadLatentAttention(nn.Module):
     def __init__(self, dim, num_heads, latent_dim, rope_theta=10000.0, dropout=0.0):
@@ -51,20 +47,33 @@ class MultiHeadLatentAttention(nn.Module):
         d_k, d_v = self.dkv_proj(x).view(b, s, 2, self.latent_dim).permute(2, 0, 1, 3)
         k = self.up_proj_k(d_k).view(b, s, self.num_heads, self.head_dim).transpose(1, 2)
         v = self.up_proj_v(d_v).view(b, s, self.num_heads, self.head_dim).transpose(1, 2)
-        sin, cos = self._build_rope_cache(k.size(-2), x.device, x.dtype)
+
+        past_len = 0 if kv_cache is None else kv_cache[0].size(2)
+        total_k = past_len + k.size(-2)
+        sin, cos = self._build_rope_cache(total_k, x.device, x.dtype)
+        sin = sin[past_len:past_len + k.size(-2)]
+        cos = cos[past_len:past_len + k.size(-2)]
         q = apply_rope(q, sin, cos)
         k = apply_rope(k, sin, cos)
+
         if kv_cache is not None:
             k = torch.cat([kv_cache[0], k], dim=2)
             v = torch.cat([kv_cache[1], v], dim=2)
-        out = F.scaled_dot_product_attention(q, k, v,attn_mask = attn_mask, dropout_p = self.dropout.p if self.training else 0.0,)
+        causal_mask = torch.triu(
+            torch.ones((total_k, total_k), dtype=torch.bool, device=x.device), diagonal=1
+        ).unsqueeze(0).unsqueeze(1)[:, :, -s:, :]
+
+        out = F.scaled_dot_product_attention(
+            q, k, v,
+            attn_mask=causal_mask,
+            dropout_p=self.dropout.p if self.training else 0.0,
+        )
         out = out.transpose(1, 2).contiguous().view(b, s, self.dim)
         out = self.out_proj(out)
         if use_cache:
             return out, (k.detach(), v.detach())
         else:
             return out, None
-
 
 class RMSNorm(nn.Module):
     def __init__(self, dim, eps=1e-6):
@@ -73,7 +82,6 @@ class RMSNorm(nn.Module):
         self.eps = eps
     def forward(self, x):
         return self.weight * x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
 
 class MLPBlock(nn.Module):
     def __init__(self, embedding_dim, mlp_size, dropout=0.1):
@@ -93,7 +101,7 @@ class MLPBlock(nn.Module):
         return x
 
 def subsequent_mask(seq_len: int, device=None) -> torch.Tensor:
-    mask = torch.tril(torch.ones((seq_len, seq_len), dtype=torch.bool, device=device))
+    mask = torch.triu(torch.ones((seq_len, seq_len), dtype=torch.bool, device=device), diagonal=1)
     return mask.unsqueeze(0).unsqueeze(1)
 
 class Expert(nn.Module):
@@ -112,8 +120,6 @@ class Expert(nn.Module):
         x = self.drop2(x)
         return x
 
-
-
 class MoEBlock(nn.Module):
     def __init__(
         self,
@@ -125,26 +131,22 @@ class MoEBlock(nn.Module):
     ):
         super().__init__()
         self.norm = RMSNorm(embed_dim)
-
-        # Expert MLP 모음
         self.experts = nn.ModuleList(
             [Expert(embed_dim, mlp_dim, dropout) for _ in range(num_experts)]
         )
-
-        # 게이트 & 게이트 드롭아웃
         self.gate = nn.Linear(embed_dim, num_experts)
         self.gate_dropout = nn.Dropout(p=0.1)
-
         self.experts_per_token = experts_per_token
         self.num_experts = num_experts
-
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         x_norm = self.norm(x)
         if torch.is_autocast_enabled() and x_norm.dtype == torch.float32:
             x_norm = x_norm.to(torch.float16)
-        gate_logits = self.gate_dropout(self.gate(x_norm))
+        gate_logits = self.gate(x_norm)
         gate_probs = F.softmax(gate_logits, dim=-1)
+        gate_probs = self.gate_dropout(gate_probs)
+        gate_probs = gate_probs / (gate_probs.sum(dim=-1, keepdim=True) + 1e-8)
         topk_probs, topk_idx = torch.topk(
             gate_probs, self.experts_per_token, dim=-1
         )
@@ -157,27 +159,27 @@ class MoEBlock(nn.Module):
         out_flat = torch.zeros_like(x_flat, dtype=x_flat.dtype)
 
         for eid, expert in enumerate(self.experts):
-             mask = (topk_idx_flat == eid)
-             if not mask.any(): continue
-             rows = mask.any(dim=1).nonzero(as_tuple=False).squeeze(-1)
-             expert_in = x_flat.index_select(0, rows)
-             expert_out = expert(expert_in)
-             probs = (topk_probs_flat[rows] * mask[rows].float()).sum(dim=1)
-             expert_out.mul_(probs.unsqueeze(-1))
-             out_flat.index_add_(0, rows, expert_out)
+            mask = (topk_idx_flat == eid)
+            if not mask.any():
+                continue
+            rows = mask.any(dim=1).nonzero(as_tuple=False).squeeze(-1)
+            expert_in = x_flat.index_select(0, rows)
+            expert_out = expert(expert_in)
+            probs = (topk_probs_flat[rows] * mask[rows].float()).sum(dim=1)
+            expert_out.mul_(probs.unsqueeze(-1))
+            out_flat.index_add_(0, rows, expert_out)
 
         output = out_flat.view(B, S, D)
-        importance = gate_probs.sum(dim=(0, 1))
-        load = torch.zeros(self.num_experts, device=x.device)
+        importance = gate_probs.float().sum(dim=(0, 1))
+        load = torch.zeros(self.num_experts, device=x.device, dtype=torch.float32)
         load.scatter_add_(0, topk_idx_flat.reshape(-1),
-                          torch.ones_like(topk_idx_flat.reshape(-1), dtype=x.dtype))
+                          torch.ones_like(topk_idx_flat.reshape(-1), dtype=load.dtype))
         balance_loss = 0.5 * (
-                torch.std(importance / importance.sum()) +
-                torch.std(load / load.sum())
+                torch.std(importance / (importance.sum() + 1e-8)) +
+                torch.std(load / (load.sum() + 1e-8))
         )
 
         return output, balance_loss
-
 
 class LatentGPTBlock(nn.Module):
     def __init__(self, embed_dim: int, latent_dim: int, mlp_dim: int, dropout: float = 0.1, num_heads: int = 16, num_experts: int = 6, experts_per_token: int = 2):
@@ -235,8 +237,7 @@ class LatentMoE(nn.Module):
 
     def forward(self, input_ids: torch.LongTensor) -> (torch.Tensor, torch.Tensor):
         b, s = input_ids.size()
-        x = self.token_embedding(input_ids) + self.positional_embedding[:, :s]
-        #x = self.token_embedding(input_ids)
+        x = self.token_embedding(input_ids)
         x = self.dropout(x)
         mask = subsequent_mask(s, device=input_ids.device)
         total_balance_loss = 0.0
@@ -246,4 +247,3 @@ class LatentMoE(nn.Module):
         x = self.norm(x)
         logits = self.lm_head(x)
         return logits, total_balance_loss / len(self.blocks)
-
