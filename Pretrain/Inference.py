@@ -5,7 +5,7 @@ from Models.LatentMoE import LatentMoE
 
 checkpoint_path = r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter150M_Kowiki_251004\model_epoch_1.pt"
 tokenizer_model_path = r"C:\junha\Git\BFG_2B\Tokenizer\spm_koraptor.model"
-prompt = "대통령은"
+prompt = "안녕"
 max_length = 100
 temperature = 0.8
 top_k = 10

@@ -147,7 +147,7 @@ def main():
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
     loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_id(), reduction="mean")
 
-    ckpt_dir = r"/Checkpoints/KoRapter150M_Kowiki_251004"
+    ckpt_dir = r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter150M_Kowiki_251004"
     os.makedirs(ckpt_dir, exist_ok=True)
 
     epoch_iter = tqdm(range(1, NUM_EPOCHS + 1), desc="Epochs")

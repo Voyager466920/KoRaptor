@@ -191,7 +191,7 @@ def main():
     TOKENIZER_PATH = r"C:\junha\Git\BFG_2B\Tokenizer\spm_kowiki.model"
     KorQuADV1_Train = r"C:\junha\Datasets\KoRaptor_FineTuning\KorQuAD_1_0\train"
     KorQuADV1_Val   = r"C:\junha\Datasets\KoRaptor_FineTuning\KorQuAD_1_0\val"
-    Pretrained_Model = r"C:\junha\Git\BFG_2B\Checkpoints\A_HuggingFace_KoRapter150M_Kowiki_AIHub_lr_1e_3\model_epoch_4.pt"
+    Pretrained_Model = r"C:\junha\Git\BFG_2B\Checkpoints\KoRapter150M_Kowiki_251004\model_epoch_4.pt"
     SAVE_DIR = r"C:\junha\Git\BFG_2B\Checkpoints\KorQuAD_V1_LoRA"
     os.makedirs(SAVE_DIR, exist_ok=True)
 
